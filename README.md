@@ -60,6 +60,7 @@ Solution: **UptimeRobot** pings `/api/cron/check-reminders` for free. It's meant
 - Resend (email + webhooks)
 - Web Push API
 - dnd-kit (drag-and-drop)
+- UptimeRobot (scheduled pings for reminder checks)
 
 
 What shows in images is not actual notes, just seeded data to test UI of markdown rendering, notes sizes and such

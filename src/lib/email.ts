@@ -14,9 +14,11 @@ function getResend(): Resend {
 
 export async function sendReminderEmail(to: string, message: string) {
   const domain = process.env.EMAIL_DOMAIN;
+  // Free tier requires onboarding@resend.dev, custom domains can use any address
+  const fromAddress = domain === 'resend.dev' ? 'onboarding@resend.dev' : `reminders@${domain}`;
 
-  return getResend().emails.send({
-    from: `Notes App <reminders@${domain}>`,
+  const result = await getResend().emails.send({
+    from: `Notes App <${fromAddress}>`,
     to,
     subject: 'Reminder',
     html: `
@@ -30,13 +32,20 @@ export async function sendReminderEmail(to: string, message: string) {
       </div>
     `,
   });
+
+  if (result.error) {
+    throw new Error(`Email send failed: ${result.error.message}`);
+  }
+
+  return result;
 }
 
 export async function sendConfirmationEmail(to: string, action: string, details: string) {
   const domain = process.env.EMAIL_DOMAIN;
+  const fromAddress = domain === 'resend.dev' ? 'onboarding@resend.dev' : `noreply@${domain}`;
 
-  return getResend().emails.send({
-    from: `Notes App <noreply@${domain}>`,
+  const result = await getResend().emails.send({
+    from: `Notes App <${fromAddress}>`,
     to,
     subject: action,
     html: `
@@ -50,4 +59,10 @@ export async function sendConfirmationEmail(to: string, action: string, details:
       </div>
     `,
   });
+
+  if (result.error) {
+    throw new Error(`Email send failed: ${result.error.message}`);
+  }
+
+  return result;
 }
