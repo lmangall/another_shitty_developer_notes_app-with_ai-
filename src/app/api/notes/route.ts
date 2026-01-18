@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, notes } from '@/db';
-import { eq, desc, ilike, or, and, sql } from 'drizzle-orm';
+import { db, notes, tags, noteTags } from '@/db';
+import { eq, desc, ilike, or, and, sql, inArray } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { logger } from '@/lib/logger';
@@ -49,8 +49,36 @@ export async function GET(request: NextRequest) {
       .where(whereClause),
   ]);
 
+  // Fetch tags for all notes
+  const noteIds = userNotes.map(n => n.id);
+  let noteTagsMap: Record<string, Array<{ id: string; name: string; color: string }>> = {};
+
+  if (noteIds.length > 0) {
+    const noteTagsWithDetails = await db
+      .select({
+        noteId: noteTags.noteId,
+        tagId: tags.id,
+        tagName: tags.name,
+        tagColor: tags.color,
+      })
+      .from(noteTags)
+      .innerJoin(tags, eq(noteTags.tagId, tags.id))
+      .where(inArray(noteTags.noteId, noteIds));
+
+    noteTagsMap = noteTagsWithDetails.reduce((acc, nt) => {
+      if (!acc[nt.noteId]) acc[nt.noteId] = [];
+      acc[nt.noteId].push({ id: nt.tagId, name: nt.tagName, color: nt.tagColor });
+      return acc;
+    }, {} as Record<string, Array<{ id: string; name: string; color: string }>>);
+  }
+
+  const notesWithTags = userNotes.map(note => ({
+    ...note,
+    tags: noteTagsMap[note.id] || [],
+  }));
+
   return NextResponse.json({
-    notes: userNotes,
+    notes: notesWithTags,
     total: Number(countResult[0].count),
     page,
     limit,

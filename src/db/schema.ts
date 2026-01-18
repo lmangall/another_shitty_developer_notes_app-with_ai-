@@ -59,6 +59,21 @@ export const notes = pgTable('notes', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Tags table
+export const tags = pgTable('tags', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  color: text('color').notNull().default('#6b7280'), // gray-500 default
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Note-Tags junction table
+export const noteTags = pgTable('note_tags', {
+  noteId: uuid('note_id').notNull().references(() => notes.id, { onDelete: 'cascade' }),
+  tagId: uuid('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
+});
+
 // Reminders table
 export const reminders = pgTable('reminders', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -68,6 +83,16 @@ export const reminders = pgTable('reminders', {
   status: text('status').notNull().default('pending'), // pending, sent, cancelled, completed
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Push subscriptions for web push notifications
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 // Email audit log
@@ -96,3 +121,9 @@ export type Reminder = typeof reminders.$inferSelect;
 export type NewReminder = typeof reminders.$inferInsert;
 export type EmailLog = typeof emailLogs.$inferSelect;
 export type NewEmailLog = typeof emailLogs.$inferInsert;
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type NewPushSubscription = typeof pushSubscriptions.$inferInsert;
+export type Tag = typeof tags.$inferSelect;
+export type NewTag = typeof tags.$inferInsert;
+export type NoteTag = typeof noteTags.$inferSelect;
+export type NewNoteTag = typeof noteTags.$inferInsert;

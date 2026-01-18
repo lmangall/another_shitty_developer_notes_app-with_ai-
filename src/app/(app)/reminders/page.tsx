@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow, differenceInHours, isPast } from 'date-fns';
 
 interface Reminder {
   id: string;
@@ -39,11 +39,35 @@ const statusIcons: Record<string, React.ReactNode> = {
 };
 
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-50 text-yellow-700',
-  sent: 'bg-green-50 text-green-700',
-  cancelled: 'bg-gray-50 text-gray-600',
-  completed: 'bg-blue-50 text-blue-700',
+  pending: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
+  sent: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
+  cancelled: 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  completed: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
 };
+
+function getUrgencyBadge(remindAt: string | null, status: string): { label: string; className: string } | null {
+  if (status !== 'pending' || !remindAt) return null;
+
+  const reminderDate = new Date(remindAt);
+
+  if (isPast(reminderDate)) {
+    return { label: 'Overdue', className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+  }
+
+  const hoursUntil = differenceInHours(reminderDate, new Date());
+
+  if (hoursUntil <= 1) {
+    return { label: 'Due very soon', className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+  }
+  if (hoursUntil <= 24) {
+    return { label: `Due in ${formatDistanceToNow(reminderDate)}`, className: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300' };
+  }
+  if (hoursUntil <= 72) {
+    return { label: `Due in ${formatDistanceToNow(reminderDate)}`, className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
+  }
+
+  return null;
+}
 
 export default function RemindersPage() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -148,13 +172,21 @@ export default function RemindersPage() {
               <CardContent className="py-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       {statusIcons[reminder.status]}
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full ${statusColors[reminder.status]}`}
                       >
                         {reminder.status}
                       </span>
+                      {(() => {
+                        const urgency = getUrgencyBadge(reminder.remindAt, reminder.status);
+                        return urgency ? (
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${urgency.className}`}>
+                            {urgency.label}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                     <p className="text-foreground mb-2">{reminder.message}</p>
                     <p className="text-sm text-muted-foreground">

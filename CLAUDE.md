@@ -11,6 +11,9 @@ Next.js app with Better Auth authentication, AI-powered note/reminder processing
 - **Email:** Resend
 - **Styling:** Tailwind CSS v4
 - **Validation:** Zod
+- **Monitoring:** UptimeRobot (pings `/api/cron/check-reminders`)
+
+**Status Page:** https://stats.uptimerobot.com/KgPXHJZr4i
 
 ---
 

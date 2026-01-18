@@ -135,19 +135,27 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
         {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
+          <>
+            <SheetHeader>
+              <SheetTitle className="sr-only">Loading note...</SheetTitle>
+            </SheetHeader>
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          </>
         ) : note ? (
           <>
             <SheetHeader className="pr-8">
               {editing ? (
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="text-xl font-bold"
-                  autoFocus
-                />
+                <>
+                  <SheetTitle className="sr-only">Editing: {note.title}</SheetTitle>
+                  <Input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="text-xl font-bold"
+                    autoFocus
+                  />
+                </>
               ) : (
                 <SheetTitle className="text-xl">{note.title}</SheetTitle>
               )}

@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Search, FileText, Trash2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { Search, FileText, Trash2, Send, Bold, Italic, List, Code, Hash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -14,7 +16,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { TagBadge } from '@/components/tag-badge';
+import { TagPicker } from '@/components/tag-picker';
 import { format } from 'date-fns';
+
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+}
+
+interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface Note {
   id: string;
@@ -22,6 +36,7 @@ interface Note {
   content: string;
   createdAt: string;
   updatedAt: string;
+  tags: Tag[];
 }
 
 interface NotesResponse {
@@ -38,6 +53,9 @@ export default function NotesPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Note | null>(null);
+  const [newNote, setNewNote] = useState('');
+  const [creating, setCreating] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     fetchNotes();
@@ -69,6 +87,78 @@ export default function NotesPage() {
     fetchNotes();
   };
 
+  const handleCreateNote = async () => {
+    if (!newNote.trim() || creating) return;
+
+    setCreating(true);
+    try {
+      const lines = newNote.trim().split('\n');
+      const title = lines[0].slice(0, 100) || 'Untitled';
+      const content = newNote.trim();
+
+      const res = await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content }),
+      });
+
+      if (res.ok) {
+        setNewNote('');
+        fetchNotes();
+      }
+    } catch (error) {
+      console.error('Failed to create note:', error);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleCreateNote();
+    }
+  };
+
+  const insertFormat = (prefix: string, suffix: string = prefix) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = newNote;
+    const selected = text.substring(start, end);
+
+    const newText = text.substring(0, start) + prefix + selected + suffix + text.substring(end);
+    setNewNote(newText);
+
+    // Restore cursor position
+    setTimeout(() => {
+      textarea.focus();
+      const newPos = selected ? start + prefix.length + selected.length + suffix.length : start + prefix.length;
+      textarea.setSelectionRange(newPos, newPos);
+    }, 0);
+  };
+
+  const insertAtLineStart = (prefix: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const text = newNote;
+
+    // Find the start of the current line
+    const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+
+    const newText = text.substring(0, lineStart) + prefix + text.substring(lineStart);
+    setNewNote(newText);
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + prefix.length, start + prefix.length);
+    }, 0);
+  };
+
   const deleteNote = async (id: string) => {
     try {
       await fetch(`/api/notes/${id}`, { method: 'DELETE' });
@@ -81,6 +171,93 @@ export default function NotesPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
+      {/* Quick Create Input */}
+      <div className="mb-8">
+        <div className="border rounded-lg overflow-hidden bg-card">
+          {/* Formatting Toolbar */}
+          <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => insertFormat('**')}
+              title="Bold (wrap with **)"
+            >
+              <Bold size={16} />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => insertFormat('*')}
+              title="Italic (wrap with *)"
+            >
+              <Italic size={16} />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => insertAtLineStart('- ')}
+              title="List item"
+            >
+              <List size={16} />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => insertFormat('`')}
+              title="Inline code"
+            >
+              <Code size={16} />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => insertAtLineStart('## ')}
+              title="Heading"
+            >
+              <Hash size={16} />
+            </Button>
+            <span className="ml-auto text-xs text-muted-foreground">
+              Markdown supported
+            </span>
+          </div>
+
+          {/* Textarea */}
+          <div className="relative">
+            <Textarea
+              ref={textareaRef}
+              placeholder="First line is the title...&#10;&#10;Rest is the body (supports Markdown)"
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="min-h-[120px] border-0 rounded-none focus-visible:ring-0 resize-none text-base"
+              autoFocus
+            />
+            <div className="absolute bottom-3 right-3 flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {newNote.trim() ? 'Cmd+Enter to save' : ''}
+              </span>
+              <Button
+                size="icon"
+                onClick={handleCreateNote}
+                disabled={!newNote.trim() || creating}
+              >
+                <Send size={18} />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Search */}
       <form onSubmit={handleSearch} className="mb-6">
         <div className="relative">
@@ -106,7 +283,7 @@ export default function NotesPage() {
       ) : notes.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText size={48} className="mx-auto mb-4 opacity-50" />
-          <p>No notes yet. Create one from the sidebar!</p>
+          <p>No notes yet. Start typing above!</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -114,28 +291,46 @@ export default function NotesPage() {
             <Card key={note.id} className="h-full hover:border-primary/50 hover:shadow-md transition-all group relative">
               <Link href={`/notes/${note.id}`}>
                 <CardContent className="p-5 h-full flex flex-col cursor-pointer">
-                  <h3 className="font-semibold text-foreground mb-2 line-clamp-1 group-hover:text-primary transition-colors pr-8">
+                  <h3 className="font-semibold text-foreground mb-2 line-clamp-1 group-hover:text-primary transition-colors pr-16">
                     {note.title}
                   </h3>
-                  <p className="text-muted-foreground text-sm line-clamp-4 flex-1 mb-3">
-                    {note.content}
-                  </p>
-                  <p className="text-xs text-muted-foreground/60">
-                    {format(new Date(note.updatedAt), 'MMM d, yyyy')}
-                  </p>
+                  {note.tags && note.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {note.tags.slice(0, 3).map(tag => (
+                        <TagBadge key={tag.id} name={tag.name} color={tag.color} />
+                      ))}
+                      {note.tags.length > 3 && (
+                        <span className="text-xs text-muted-foreground">+{note.tags.length - 3}</span>
+                      )}
+                    </div>
+                  )}
+                  <div className="prose prose-sm text-muted-foreground text-sm line-clamp-6 flex-1 mb-3">
+                    <ReactMarkdown>{note.content}</ReactMarkdown>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground/60">
+                    <span>{countWords(note.content)} words</span>
+                    <span>{format(new Date(note.updatedAt), 'MMM d, yyyy')}</span>
+                  </div>
                 </CardContent>
               </Link>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setDeleteTarget(note);
-                }}
-                className="absolute top-3 right-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 size={16} />
-              </Button>
+              <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <TagPicker
+                  noteId={note.id}
+                  currentTags={note.tags || []}
+                  onTagsChange={fetchNotes}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setDeleteTarget(note);
+                  }}
+                  className="text-muted-foreground hover:text-destructive h-7 w-7 p-0"
+                >
+                  <Trash2 size={16} />
+                </Button>
+              </div>
             </Card>
           ))}
         </div>
