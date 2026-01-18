@@ -49,8 +49,16 @@ export async function sendPushNotification(userId: string, payload: PushPayload)
     return { success: false, error: 'No subscriptions found' };
   }
 
+  logger.info('Sending push to subscriptions', { userId, count: subscriptions.length });
+
   const results = await Promise.allSettled(
     subscriptions.map(async (sub) => {
+      const platform = sub.endpoint.includes('fcm.googleapis.com')
+        ? 'Chrome/Android'
+        : sub.endpoint.includes('push.apple.com')
+          ? 'Safari/iOS'
+          : 'Other';
+
       try {
         await webpush.sendNotification(
           {
@@ -62,17 +70,29 @@ export async function sendPushNotification(userId: string, payload: PushPayload)
           },
           JSON.stringify(payload)
         );
-        return { success: true, endpoint: sub.endpoint };
+        logger.info('Push sent successfully', { platform, endpoint: sub.endpoint.slice(0, 50) });
+        return { success: true, endpoint: sub.endpoint, platform };
       } catch (error: unknown) {
+        const statusCode = error && typeof error === 'object' && 'statusCode' in error
+          ? (error as { statusCode: number }).statusCode
+          : null;
+        const body = error && typeof error === 'object' && 'body' in error
+          ? (error as { body: string }).body
+          : null;
+
+        logger.error('Push failed', error as Error, {
+          platform,
+          statusCode,
+          body,
+          endpoint: sub.endpoint.slice(0, 50),
+        });
+
         // If subscription is expired or invalid, remove it
-        if (error && typeof error === 'object' && 'statusCode' in error) {
-          const statusCode = (error as { statusCode: number }).statusCode;
-          if (statusCode === 404 || statusCode === 410) {
-            await db
-              .delete(pushSubscriptions)
-              .where(eq(pushSubscriptions.endpoint, sub.endpoint));
-            logger.info('Removed expired push subscription', { endpoint: sub.endpoint });
-          }
+        if (statusCode === 404 || statusCode === 410) {
+          await db
+            .delete(pushSubscriptions)
+            .where(eq(pushSubscriptions.endpoint, sub.endpoint));
+          logger.info('Removed expired push subscription', { platform, endpoint: sub.endpoint.slice(0, 50) });
         }
         throw error;
       }
@@ -82,7 +102,7 @@ export async function sendPushNotification(userId: string, payload: PushPayload)
   const successful = results.filter((r) => r.status === 'fulfilled').length;
   const failed = results.filter((r) => r.status === 'rejected').length;
 
-  logger.info('Push notifications sent', { userId, successful, failed });
+  logger.info('Push notifications completed', { userId, successful, failed });
 
   return { success: successful > 0, sent: successful, failed };
 }
