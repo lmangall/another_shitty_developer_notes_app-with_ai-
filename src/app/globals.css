@@ -290,6 +290,10 @@
   gap: 1rem;
 }
 
+.notes-grid > * {
+  min-width: 0; /* Allow grid items to shrink below content size */
+}
+
 /* On mobile, force single column and disable spanning */
 @media (max-width: 640px) {
   .notes-grid {
@@ -300,6 +304,27 @@
     grid-column: span 1 !important;
     grid-row: span 1 !important;
   }
+}
+
+/* Prevent prose content from causing horizontal overflow */
+.prose pre,
+.prose code,
+.prose table {
+  max-width: 100%;
+}
+
+.prose pre {
+  overflow-x: auto;
+  word-wrap: normal;
+}
+
+.prose code {
+  word-break: break-word;
+}
+
+.prose table {
+  display: block;
+  overflow-x: auto;
 }
 
 /* Extended line clamp for tall cards */

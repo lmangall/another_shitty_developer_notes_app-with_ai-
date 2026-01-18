@@ -314,7 +314,7 @@ export default function NotesPage() {
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full overflow-x-hidden">
       {/* Quick Create Input */}
       <div className="mb-8">
         <div className="border rounded-lg overflow-hidden bg-card">

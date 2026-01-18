@@ -75,7 +75,7 @@ export function NoteCard({ note, onDelete, onTagsChange, onResize, disableGridSt
             </div>
           )}
           <div
-            className="prose prose-sm text-muted-foreground text-sm flex-1 mb-3 overflow-hidden"
+            className="prose prose-sm text-muted-foreground text-sm flex-1 mb-3 overflow-hidden max-w-full"
             style={{
               display: '-webkit-box',
               WebkitLineClamp: lineClampValue,
