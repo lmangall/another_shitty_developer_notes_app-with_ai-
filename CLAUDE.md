@@ -144,12 +144,27 @@ npm run db:studio    # Open Drizzle Studio
 
 ---
 
-## Direct Database Insertion (via Claude)
+## Direct Database Operations (via Claude)
 
-When the user asks to create notes, reminders, or tags directly via prompt, write and execute a TypeScript script inline.
+When the user asks to create, update, or delete notes, reminders, or tags directly via prompt, choose the appropriate method:
 
-### Script Template
+### Simple Operations → One-liner tsx
+For single queries or simple operations (1-2 steps):
+```bash
+npx tsx -e "
+import { drizzle } from 'drizzle-orm/neon-http';
+import { neon } from '@neondatabase/serverless';
+import { notes } from './src/db/schema';
+import 'dotenv/config';
+const db = drizzle(neon(process.env.DATABASE_URL!));
+console.log(await db.select().from(notes));
+"
+```
+
+### Complex Operations → Script File
+For multi-step operations (lookups, conditionals, multiple inserts):
 ```typescript
+// scripts/task-name.ts
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
 import { users, notes, tags, noteTags, reminders } from '../src/db/schema';
@@ -163,7 +178,9 @@ const db = drizzle(sql);
 // Then use user.id for userId in inserts
 ```
 
-Run with: `npx tsx <script.ts>`
+Run with: `npx tsx scripts/task-name.ts`
+
+**IMPORTANT: Always delete script files after execution.** Do not leave temporary scripts in the codebase.
 
 ### Notes
 - **title**: Short descriptive title

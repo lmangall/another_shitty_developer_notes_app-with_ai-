@@ -17,7 +17,7 @@ let vapidConfigured = false;
 if (vapidPublicKey && vapidPrivateKey && vapidPublicKey.length > 10 && !vapidPublicKey.includes('=')) {
   try {
     webpush.setVapidDetails(
-      'mailto:' + (process.env.VAPID_EMAIL || 'noreply@example.com'),
+      'mailto:' + cleanKey(process.env.VAPID_EMAIL || 'noreply@example.com'),
       vapidPublicKey,
       vapidPrivateKey
     );
