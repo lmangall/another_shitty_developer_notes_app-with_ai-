@@ -1,0 +1,285 @@
+# Notes App
+
+Next.js app with Better Auth authentication, AI-powered note/reminder processing, Neon serverless PostgreSQL, and Resend emails.
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router)
+- **Auth:** Better Auth (email/password + Google OAuth)
+- **Database:** Drizzle ORM + Neon Serverless PostgreSQL
+- **AI:** Vercel AI SDK + Anthropic Claude
+- **Email:** Resend
+- **Styling:** Tailwind CSS v4
+- **Validation:** Zod
+
+---
+
+## Server vs Client Components
+
+**Use Server Components (default):**
+- Data fetching at component level
+- No interactivity needed
+- SEO-friendly content
+- Direct database access
+
+**Use Client Components (`"use client"`):**
+- Interactive UI (forms, buttons with state)
+- Browser APIs (localStorage, speech recognition)
+- Event handlers (onClick, onChange)
+
+---
+
+## AI SDK Patterns
+
+**Structured Output with `generateObject()`:**
+```typescript
+import { generateObject } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+import { z } from 'zod';
+
+const model = anthropic('claude-sonnet-4-20250514');
+
+const schema = z.object({
+  title: z.string(),
+  content: z.string(),
+});
+
+const { object } = await generateObject({
+  model,
+  schema,
+  prompt: `Extract data from: "${input}"`,
+});
+```
+
+**Best Practices:**
+- Use Zod schemas to constrain model outputs
+- Keep API keys server-side (use Server Actions or API routes)
+- Use `generateObject()` for predictable structured data
+- Use `streamText()` for chat/conversational responses
+
+---
+
+## Better Auth Setup
+
+**Server-side auth check:**
+```typescript
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
+
+const session = await auth.api.getSession({
+  headers: await headers(),
+});
+
+if (!session) {
+  redirect('/login');
+}
+```
+
+**Client-side auth:**
+```typescript
+import { authClient } from '@/lib/auth-client';
+
+// Sign in
+await authClient.signIn.email({ email, password });
+
+// Sign out
+await authClient.signOut();
+
+// Get session
+const session = await authClient.getSession();
+```
+
+---
+
+## Drizzle ORM
+
+**Schema Definition:**
+```typescript
+import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+
+export const notes = pgTable('notes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Infer types from schema
+export type Note = typeof notes.$inferSelect;
+export type NewNote = typeof notes.$inferInsert;
+```
+
+**Queries:**
+```typescript
+import { db } from '@/db';
+import { notes } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+
+// Select
+const userNotes = await db.select().from(notes).where(eq(notes.userId, userId));
+
+// Insert
+await db.insert(notes).values({ userId, title, content });
+
+// Update
+await db.update(notes).set({ title }).where(eq(notes.id, id));
+
+// Delete
+await db.delete(notes).where(eq(notes.id, id));
+```
+
+**Migration Commands:**
+```bash
+npm run db:generate  # Generate migration
+npm run db:migrate   # Run migration
+npm run db:push      # Push schema (dev only)
+npm run db:studio    # Open Drizzle Studio
+```
+
+**NEVER reset database or run destructive commands** without explicit user confirmation.
+
+---
+
+## Resend Email
+
+```typescript
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+await resend.emails.send({
+  from: `App <noreply@${process.env.EMAIL_DOMAIN}>`,
+  to: user.email,
+  subject: 'Subject',
+  html: '<p>Email body</p>',
+});
+```
+
+---
+
+## Constants Pattern
+
+Use `as const` arrays for dropdown values (not enums):
+
+```typescript
+export const STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'completed', label: 'Completed' },
+] as const;
+
+export type StatusValue = (typeof STATUS_OPTIONS)[number]['value'];
+```
+
+---
+
+## Form Patterns
+
+Use Zod for validation with react-hook-form:
+
+```typescript
+"use client";
+
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+const formSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Invalid email'),
+});
+
+type FormData = z.infer<typeof formSchema>;
+
+export function MyForm() {
+  const form = useForm<FormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: { name: '', email: '' },
+  });
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)}>
+      {/* Form fields */}
+    </form>
+  );
+}
+```
+
+---
+
+## API Routes
+
+**Route Handler Pattern:**
+```typescript
+import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
+
+export async function GET() {
+  const session = await auth.api.getSession({ headers: await headers() });
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Handle request
+  return NextResponse.json({ data });
+}
+```
+
+---
+
+## Git Conventions
+
+- **Commit style:** One-line conventional commits
+- **Format:** `type: description` (feat, fix, refactor, docs, chore)
+- **No Claude mentions** in commit messages
+
+Examples:
+```
+feat: add user authentication
+fix: resolve login redirect issue
+refactor: simplify form validation
+```
+
+---
+
+## Security
+
+- Never commit `.env.local` or secrets
+- Validate all user inputs with Zod
+- Always check session before database operations
+- Use parameterized queries (Drizzle handles this)
+- Be careful with SQL queries (avoid injection)
+
+---
+
+## Slash Commands
+
+Available via `/command`:
+- `/commit` - Auto-commit current changes
+- `/db` - Database task helper
+
+---
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── (app)/           # Authenticated routes
+│   ├── (auth)/          # Auth routes (login)
+│   └── api/             # API routes
+├── components/
+│   ├── ui/              # Shadcn components
+│   └── layout/          # Layout components
+├── db/
+│   ├── index.ts         # Database connection
+│   └── schema.ts        # Drizzle schema
+├── lib/
+│   ├── auth.ts          # Better Auth config
+│   ├── auth-client.ts   # Client auth
+│   ├── ai.ts            # AI processing
+│   └── email.ts         # Resend email
+└── types/               # TypeScript types
+```

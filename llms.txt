@@ -1,0 +1,66 @@
+# Notes App - LLM Reference Documentation
+
+## Tech Stack Documentation
+
+### AI SDK (Vercel)
+- Full docs: https://ai-sdk.dev/llms.txt
+- Use `generateObject()` for structured outputs with Zod schemas
+- Use `streamText()` for streaming responses
+- Keep API keys server-side only
+
+### Better Auth
+- Full docs: https://better-auth.com/llms.txt
+- Drizzle adapter for PostgreSQL
+- Supports email/password and OAuth providers
+- Magic links and email verification supported
+
+### Resend (Email)
+- Full docs: https://resend.com/docs/llms-full.txt
+- Simple API: `resend.emails.send({ from, to, subject, html })`
+- Supports contact management and broadcasts
+
+### Drizzle ORM
+- Full docs: https://orm.drizzle.team/llms.txt
+- Schema-first TypeScript ORM
+- Infer types with `$inferSelect` and `$inferInsert`
+- Use `drizzle-kit` for migrations
+
+### Next.js
+- Docs: https://nextjs.org/docs
+- App Router with Server/Client components
+- Route handlers in `app/api/`
+- Server Actions with `'use server'`
+
+### Tailwind CSS v4
+- Docs: https://tailwindcss.com/docs
+- CSS-first configuration
+- Use `cn()` utility for conditional classes
+
+### Zod
+- Docs: https://zod.dev
+- Schema validation and type inference
+- Use with react-hook-form via `zodResolver`
+
+## Key Patterns
+
+### Structured AI Output
+```typescript
+const { object } = await generateObject({
+  model: anthropic('claude-sonnet-4-20250514'),
+  schema: z.object({ field: z.string() }),
+  prompt: 'Extract data from input',
+});
+```
+
+### Auth Check Pattern
+```typescript
+const session = await auth.api.getSession({
+  headers: await headers(),
+});
+if (!session) redirect('/login');
+```
+
+### Drizzle Query Pattern
+```typescript
+const items = await db.select().from(table).where(eq(table.userId, userId));
+```
