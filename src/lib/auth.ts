@@ -39,14 +39,10 @@ export const auth = betterAuth({
     },
   },
   socialProviders: {},
-  trustedOrigins: (origin) => {
-    if (!origin) return false;
-    // Allow localhost
-    if (origin.startsWith('http://localhost:')) return true;
-    // Allow all Vercel preview/production URLs
-    if (origin.endsWith('.vercel.app')) return true;
-    // Allow configured URLs
-    const allowed = [
+  trustedOrigins: (request) => {
+    const origin = request?.headers.get('origin');
+    const origins: string[] = [
+      'http://localhost:3000',
       process.env.BETTER_AUTH_URL,
       process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
       process.env.VERCEL_BRANCH_URL
@@ -55,8 +51,14 @@ export const auth = betterAuth({
       process.env.VERCEL_PROJECT_PRODUCTION_URL
         ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
         : null,
-    ].filter(Boolean);
-    return allowed.includes(origin);
+    ].filter((o): o is string => Boolean(o));
+
+    // Dynamically add the current origin if it's a Vercel preview URL
+    if (origin?.endsWith('.vercel.app') && !origins.includes(origin)) {
+      origins.push(origin);
+    }
+
+    return origins;
   },
 });
 
