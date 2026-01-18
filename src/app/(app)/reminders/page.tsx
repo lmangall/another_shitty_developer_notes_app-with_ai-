@@ -168,12 +168,16 @@ export default function RemindersPage() {
     if (!editTarget) return;
     setEditLoading(true);
     try {
+      // Convert local datetime string to ISO (UTC) before sending to server
+      // This ensures the server receives the correct UTC time regardless of server timezone
+      const remindAtISO = editRemindAt ? new Date(editRemindAt).toISOString() : null;
+
       await fetch(`/api/reminders/${editTarget.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: editMessage,
-          remindAt: editRemindAt || null,
+          remindAt: remindAtISO,
           notifyVia: editNotifyVia,
         }),
       });
