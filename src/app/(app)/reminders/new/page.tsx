@@ -80,30 +80,118 @@ export default function NewReminderPage() {
           <h1 className="text-xl font-bold text-foreground">Create New Reminder</h1>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit}>
             {error && (
-              <div className="p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
+              <div className="p-3 mb-4 bg-destructive/10 text-destructive rounded-lg text-sm">
                 {error}
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="message">Message</Label>
-              <Textarea
-                id="message"
-                placeholder="What do you want to be reminded about?"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={4}
-                required
-              />
+            {/* Desktop: Two-column layout */}
+            <div className="hidden md:flex gap-6">
+              {/* Left: Calendar */}
+              <div className="shrink-0">
+                <Label className="mb-2 block">Remind At (optional)</Label>
+                <div className="rounded-md border bg-card">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                  />
+                </div>
+                {selectedDate && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Input
+                      type="time"
+                      value={selectedTime}
+                      onChange={(e) => setSelectedTime(e.target.value)}
+                      className="w-28"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedDate(undefined)}
+                      className="text-muted-foreground text-xs"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Right: Message + Notify Via */}
+              <div className="flex-1 flex flex-col">
+                <div className="space-y-2 flex-1 flex flex-col">
+                  <Label htmlFor="message">Message</Label>
+                  <Textarea
+                    id="message"
+                    placeholder="What do you want to be reminded about?"
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    className="flex-1 min-h-[120px] resize-none"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2 mt-4">
+                  <Label>Notify Via</Label>
+                  <div className="flex gap-2">
+                    {NOTIFY_VIA_OPTIONS.map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        variant={notifyVia === option.value ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setNotifyVia(option.value)}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {notifyVia === 'push' && 'Push notifications must be enabled.'}
+                    {notifyVia === 'both' && 'Email and push notification.'}
+                    {notifyVia === 'email' && 'Email reminder.'}
+                  </p>
+                </div>
+
+                {selectedDate && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Scheduled: {format(selectedDate, 'EEE, MMM d')} at {selectedTime}
+                  </p>
+                )}
+
+                <div className="flex justify-end gap-3 mt-4">
+                  <Link href="/reminders">
+                    <Button type="button" variant="secondary">
+                      Cancel
+                    </Button>
+                  </Link>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? 'Creating...' : 'Create Reminder'}
+                  </Button>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-3">
-              <Label>Remind At (optional)</Label>
+            {/* Mobile: Stacked layout */}
+            <div className="md:hidden space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="message-mobile">Message</Label>
+                <Textarea
+                  id="message-mobile"
+                  placeholder="What do you want to be reminded about?"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  rows={4}
+                  required
+                />
+              </div>
 
-              {/* Mobile: Collapsible calendar */}
-              <div className="md:hidden">
+              <div className="space-y-2">
+                <Label>Remind At (optional)</Label>
                 <Button
                   type="button"
                   variant="outline"
@@ -120,92 +208,68 @@ export default function NewReminderPage() {
                   )}
                 </Button>
                 {showCalendarMobile && (
-                  <div className="mt-2 rounded-md border bg-card p-2">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                  <div className="mt-2">
+                    <div className="rounded-md border bg-card inline-block">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      />
+                    </div>
+                  </div>
+                )}
+                {selectedDate && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <Input
+                      type="time"
+                      value={selectedTime}
+                      onChange={(e) => setSelectedTime(e.target.value)}
+                      className="w-28"
                     />
+                    <span className="text-sm text-muted-foreground">
+                      {format(selectedDate, 'EEE, MMM d')}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedDate(undefined)}
+                      className="text-muted-foreground text-xs ml-auto"
+                    >
+                      Clear
+                    </Button>
                   </div>
                 )}
               </div>
 
-              {/* Desktop: Always visible calendar */}
-              <div className="hidden md:block rounded-md border bg-card">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={setSelectedDate}
-                  disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                  className="mx-auto"
-                />
-              </div>
-
-              {/* Time input - show when date is selected */}
-              {selectedDate && (
-                <div className="flex items-center gap-3">
-                  <Label htmlFor="time" className="shrink-0">
-                    Time:
-                  </Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={selectedTime}
-                    onChange={(e) => setSelectedTime(e.target.value)}
-                    className="w-32"
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    {format(selectedDate, 'EEE, MMM d')} at {selectedTime}
-                  </span>
+              <div className="space-y-2">
+                <Label>Notify Via</Label>
+                <div className="flex gap-2">
+                  {NOTIFY_VIA_OPTIONS.map((option) => (
+                    <Button
+                      key={option.value}
+                      type="button"
+                      variant={notifyVia === option.value ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setNotifyVia(option.value)}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
                 </div>
-              )}
-
-              {/* Clear button */}
-              {selectedDate && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedDate(undefined)}
-                  className="text-muted-foreground"
-                >
-                  Clear date
-                </Button>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notifyVia">Notify Via</Label>
-              <div className="flex gap-2">
-                {NOTIFY_VIA_OPTIONS.map((option) => (
-                  <Button
-                    key={option.value}
-                    type="button"
-                    variant={notifyVia === option.value ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setNotifyVia(option.value)}
-                  >
-                    {option.label}
-                  </Button>
-                ))}
               </div>
-              <p className="text-xs text-muted-foreground">
-                {notifyVia === 'push' && 'Make sure push notifications are enabled in settings.'}
-                {notifyVia === 'both' && 'You will receive both email and push notification.'}
-                {notifyVia === 'email' && 'You will receive an email reminder.'}
-              </p>
-            </div>
 
-            <div className="flex justify-end gap-3">
-              <Link href="/reminders">
-                <Button type="button" variant="secondary">
-                  Cancel
+              <div className="flex justify-end gap-3">
+                <Link href="/reminders">
+                  <Button type="button" variant="secondary">
+                    Cancel
+                  </Button>
+                </Link>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Creating...' : 'Create Reminder'}
                 </Button>
-              </Link>
-              <Button type="submit" disabled={loading}>
-                {loading ? 'Creating...' : 'Create Reminder'}
-              </Button>
+              </div>
             </div>
           </form>
         </CardContent>
