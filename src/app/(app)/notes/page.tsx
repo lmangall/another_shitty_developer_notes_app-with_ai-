@@ -1,13 +1,25 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Search, FileText, Trash2, Send, Bold, Italic, List, Code, Hash } from 'lucide-react';
+import { Search, FileText, Send, Bold, Italic, List, Code, Hash } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
@@ -17,13 +29,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { TagBadge } from '@/components/tag-badge';
-import { TagPicker } from '@/components/tag-picker';
-import { format } from 'date-fns';
-
-function countWords(text: string): number {
-  return text.trim().split(/\s+/).filter(word => word.length > 0).length;
-}
+import { NoteCard } from '@/components/notes/note-card';
+import { SortableNoteCard } from '@/components/notes/sortable-note-card';
+import { TrashDropZone } from '@/components/notes/trash-drop-zone';
+import { NotesTable } from '@/components/notes/notes-table';
+import { NotesFilterBar } from '@/components/notes/notes-filter-bar';
+import { ViewToggle } from '@/components/notes/view-toggle';
+import type { ViewOption, NoteSortOption, SortOrder } from '@/lib/constants';
 
 interface Tag {
   id: string;
@@ -38,6 +50,8 @@ interface Note {
   createdAt: string;
   updatedAt: string;
   tags: Tag[];
+  cardColSpan: number;
+  cardRowSpan: number;
 }
 
 interface NotesResponse {
@@ -46,6 +60,9 @@ interface NotesResponse {
   page: number;
   totalPages: number;
 }
+
+// Local storage key for view preference
+const VIEW_STORAGE_KEY = 'notes-view-preference';
 
 export default function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -58,9 +75,47 @@ export default function NotesPage() {
   const [creating, setCreating] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // View and filter state
+  const [view, setView] = useState<ViewOption>('grid');
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<NoteSortOption>('position');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  // Drag state
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeNote = activeId ? notes.find(n => n.id === activeId) : null;
+
+  // dnd-kit sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Load view preference from localStorage
+  useEffect(() => {
+    const savedView = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (savedView === 'grid' || savedView === 'table') {
+      setView(savedView);
+    }
+  }, []);
+
+  // Save view preference to localStorage
+  function handleViewChange(newView: ViewOption) {
+    setView(newView);
+    localStorage.setItem(VIEW_STORAGE_KEY, newView);
+  }
+
   useEffect(() => {
     fetchNotes();
-  }, [page, search]);
+  }, [page, search, selectedTagIds, sortBy, sortOrder, dateFrom, dateTo]);
 
   const fetchNotes = async () => {
     setLoading(true);
@@ -68,8 +123,13 @@ export default function NotesPage() {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '20',
+        sortBy,
+        sortOrder,
       });
       if (search) params.set('search', search);
+      if (selectedTagIds.length > 0) params.set('tags', selectedTagIds.join(','));
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
 
       const res = await fetch(`/api/notes?${params}`);
       const data: NotesResponse = await res.json();
@@ -170,6 +230,89 @@ export default function NotesPage() {
     }
   };
 
+  // Handle sort column click - toggle order if same column, otherwise set new column
+  const handleSortChange = (column: NoteSortOption) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortBy(column);
+      setSortOrder('desc');
+    }
+    setPage(1);
+  };
+
+  const handleResize = async (noteId: string, colSpan: number, rowSpan: number) => {
+    // Optimistic update
+    setNotes(prev => prev.map(note =>
+      note.id === noteId
+        ? { ...note, cardColSpan: colSpan, cardRowSpan: rowSpan }
+        : note
+    ));
+
+    try {
+      const res = await fetch(`/api/notes/${noteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardColSpan: colSpan, cardRowSpan: rowSpan }),
+      });
+
+      if (!res.ok) {
+        // Revert on error
+        fetchNotes();
+      }
+    } catch (error) {
+      console.error('Failed to resize note:', error);
+      fetchNotes();
+    }
+  };
+
+  // Drag handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over) return;
+
+    // Check if dropped on trash
+    if (over.id === 'trash-zone') {
+      const noteToDelete = notes.find(n => n.id === active.id);
+      if (noteToDelete) {
+        setDeleteTarget(noteToDelete);
+      }
+      return;
+    }
+
+    // Reorder notes
+    if (active.id !== over.id) {
+      const oldIndex = notes.findIndex(n => n.id === active.id);
+      const newIndex = notes.findIndex(n => n.id === over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        // Optimistic update
+        const newNotes = [...notes];
+        const [movedNote] = newNotes.splice(oldIndex, 1);
+        newNotes.splice(newIndex, 0, movedNote);
+        setNotes(newNotes);
+
+        // Persist new order
+        try {
+          await fetch('/api/notes/reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ noteIds: newNotes.map(n => n.id) }),
+          });
+        } catch (error) {
+          console.error('Failed to reorder notes:', error);
+          fetchNotes();
+        }
+      }
+    }
+  };
+
   return (
     <div className="w-full">
       {/* Quick Create Input */}
@@ -260,7 +403,7 @@ export default function NotesPage() {
       </div>
 
       {/* Search */}
-      <form onSubmit={handleSearch} className="mb-6">
+      <form onSubmit={handleSearch} className="mb-4">
         <div className="relative">
           <Search
             size={20}
@@ -276,7 +419,24 @@ export default function NotesPage() {
         </div>
       </form>
 
-      {/* Notes Grid */}
+      {/* Filters and View Toggle */}
+      <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
+        <NotesFilterBar
+          selectedTagIds={selectedTagIds}
+          onTagsChange={setSelectedTagIds}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSortByChange={setSortBy}
+          onSortOrderChange={setSortOrder}
+        />
+        <ViewToggle view={view} onViewChange={handleViewChange} />
+      </div>
+
+      {/* Notes Grid or Table */}
       {loading ? (
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
@@ -286,55 +446,53 @@ export default function NotesPage() {
           <FileText size={48} className="mx-auto mb-4 opacity-50" />
           <p>No notes yet. Start typing above!</p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-          {notes.map((note) => (
-            <Card key={note.id} className="h-full hover:border-primary/50 hover:shadow-md transition-all group relative">
-              <Link href={`/notes/${note.id}`}>
-                <CardContent className="p-5 h-full flex flex-col cursor-pointer">
-                  <h3 className="font-semibold text-foreground mb-2 line-clamp-1 group-hover:text-primary transition-colors pr-16">
-                    {note.title}
-                  </h3>
-                  {note.tags && note.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {note.tags.slice(0, 3).map(tag => (
-                        <TagBadge key={tag.id} name={tag.name} color={tag.color} />
-                      ))}
-                      {note.tags.length > 3 && (
-                        <span className="text-xs text-muted-foreground">+{note.tags.length - 3}</span>
-                      )}
-                    </div>
-                  )}
-                  <div className="prose prose-sm text-muted-foreground text-sm line-clamp-6 flex-1 mb-3">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground/60">
-                    <span>{countWords(note.content)} words</span>
-                    <span>{format(new Date(note.updatedAt), 'MMM d, yyyy')}</span>
-                  </div>
-                </CardContent>
-              </Link>
-              <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <TagPicker
-                  noteId={note.id}
-                  currentTags={note.tags || []}
+      ) : view === 'grid' ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={notes.map(n => n.id)} strategy={rectSortingStrategy}>
+            <div className="notes-grid">
+              {notes.map((note) => (
+                <SortableNoteCard
+                  key={note.id}
+                  note={note}
+                  onDelete={setDeleteTarget}
                   onTagsChange={fetchNotes}
+                  onResize={handleResize}
                 />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setDeleteTarget(note);
-                  }}
-                  className="text-muted-foreground hover:text-destructive h-7 w-7 p-0"
-                >
-                  <Trash2 size={16} />
-                </Button>
+              ))}
+            </div>
+          </SortableContext>
+
+          {/* Trash drop zone - visible during drag */}
+          <TrashDropZone isVisible={!!activeId} />
+
+          {/* Drag overlay for the card being dragged */}
+          <DragOverlay>
+            {activeNote ? (
+              <div className="opacity-80">
+                <NoteCard
+                  note={activeNote}
+                  onDelete={() => {}}
+                  onTagsChange={() => {}}
+                  onResize={() => {}}
+                />
               </div>
-            </Card>
-          ))}
-        </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        <NotesTable
+          notes={notes}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSortChange={handleSortChange}
+          onDelete={setDeleteTarget}
+          onTagsChange={fetchNotes}
+        />
       )}
 
       {/* Pagination */}

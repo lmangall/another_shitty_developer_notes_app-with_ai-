@@ -280,3 +280,32 @@
   text-decoration: line-through;
   color: var(--muted-foreground);
 }
+
+/* Notes grid with dynamic card spanning */
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-auto-rows: minmax(200px, auto);
+  grid-auto-flow: dense;
+  gap: 1rem;
+}
+
+/* On mobile, force single column and disable spanning */
+@media (max-width: 640px) {
+  .notes-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .notes-grid > * {
+    grid-column: span 1 !important;
+    grid-row: span 1 !important;
+  }
+}
+
+/* Extended line clamp for tall cards */
+.line-clamp-\[14\] {
+  display: -webkit-box;
+  -webkit-line-clamp: 14;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

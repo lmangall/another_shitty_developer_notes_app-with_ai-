@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, notes } from '@/db';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { logger } from '@/lib/logger';
@@ -26,7 +26,7 @@ export async function GET(
   const [note] = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.id, id), eq(notes.userId, session.user.id)));
+    .where(and(eq(notes.id, id), eq(notes.userId, session.user.id), isNull(notes.deletedAt)));
 
   if (!note) {
     return NextResponse.json({ error: 'Note not found' }, { status: 404 });
@@ -46,12 +46,20 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { title, content } = body;
+  const { title, content, cardColSpan, cardRowSpan } = body;
+
+  // Validate spans if provided (1-2 columns, 1-2 rows for preset sizes)
+  if (cardColSpan !== undefined && (cardColSpan < 1 || cardColSpan > 2)) {
+    return NextResponse.json({ error: 'Invalid column span (must be 1-2)' }, { status: 400 });
+  }
+  if (cardRowSpan !== undefined && (cardRowSpan < 1 || cardRowSpan > 2)) {
+    return NextResponse.json({ error: 'Invalid row span (must be 1-2)' }, { status: 400 });
+  }
 
   const [note] = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.id, id), eq(notes.userId, session.user.id)));
+    .where(and(eq(notes.id, id), eq(notes.userId, session.user.id), isNull(notes.deletedAt)));
 
   if (!note) {
     return NextResponse.json({ error: 'Note not found' }, { status: 404 });
@@ -62,6 +70,8 @@ export async function PATCH(
     .set({
       ...(title && { title }),
       ...(content && { content }),
+      ...(cardColSpan !== undefined && { cardColSpan }),
+      ...(cardRowSpan !== undefined && { cardRowSpan }),
       updatedAt: new Date(),
     })
     .where(eq(notes.id, id))
@@ -86,15 +96,18 @@ export async function DELETE(
   const [note] = await db
     .select()
     .from(notes)
-    .where(and(eq(notes.id, id), eq(notes.userId, session.user.id)));
+    .where(and(eq(notes.id, id), eq(notes.userId, session.user.id), isNull(notes.deletedAt)));
 
   if (!note) {
     return NextResponse.json({ error: 'Note not found' }, { status: 404 });
   }
 
-  await db.delete(notes).where(eq(notes.id, id));
+  await db
+    .update(notes)
+    .set({ deletedAt: new Date() })
+    .where(eq(notes.id, id));
 
-  logger.info('Note deleted', { userId: session.user.id, noteId: id });
+  logger.info('Note soft deleted', { userId: session.user.id, noteId: id });
 
   return NextResponse.json({ success: true });
 }

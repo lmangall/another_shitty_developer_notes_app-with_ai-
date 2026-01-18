@@ -33,6 +33,12 @@ Multiple ways to create notes, all processed by AI:
 - Web Push API with VAPID
 - Works on mobile browsers
 
+**Notes Grid**
+- Resizable cards: Small (1×1), Wide (2×1), Tall (1×2), Large (2×2)
+- Drag-and-drop reordering with [@dnd-kit](https://dndkit.com/)
+- GitHub Flavored Markdown (tables, checklists, strikethrough)
+- CSS Grid with `grid-auto-flow: dense` for optimal packing
+
 **The Basics**
 - Notes with tags and markdown
 - Dashboard with stats
@@ -53,6 +59,7 @@ Solution: **UptimeRobot** pings `/api/cron/check-reminders` for free. It's meant
 - Vercel AI SDK + Sonnet (could swap for cheaper models easily)
 - Resend (email + webhooks)
 - Web Push API
+- dnd-kit (drag-and-drop)
 
 
 What shows in images is not actual notes, just seeded data to test UI of markdown rendering, notes sizes and such

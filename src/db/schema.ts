@@ -57,8 +57,10 @@ export const notes = pgTable('notes', {
   content: text('content').notNull(),
   cardColSpan: integer('card_col_span').notNull().default(1),
   cardRowSpan: integer('card_row_span').notNull().default(1),
+  position: integer('position').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at'),
 });
 
 // Tags table

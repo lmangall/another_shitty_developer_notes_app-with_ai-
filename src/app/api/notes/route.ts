@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, notes, tags, noteTags } from '@/db';
-import { eq, desc, ilike, or, and, sql, inArray } from 'drizzle-orm';
+import { eq, desc, asc, ilike, or, and, sql, inArray, gte, lte, isNull } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { logger } from '@/lib/logger';
+import type { NoteSortOption, SortOrder } from '@/lib/constants';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -24,7 +25,19 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get('limit') || '20');
   const offset = (page - 1) * limit;
 
-  let whereClause = eq(notes.userId, session.user.id);
+  // Filter params
+  const tagIds = searchParams.get('tags')?.split(',').filter(Boolean) || [];
+  const sortBy = (searchParams.get('sortBy') || 'updatedAt') as NoteSortOption;
+  const sortOrder = (searchParams.get('sortOrder') || 'desc') as SortOrder;
+  const dateFrom = searchParams.get('dateFrom');
+  const dateTo = searchParams.get('dateTo');
+
+  // Build where clause - exclude soft-deleted notes
+  let whereClause = and(
+    eq(notes.userId, session.user.id),
+    isNull(notes.deletedAt)
+  )!;
+
   if (search) {
     whereClause = and(
       whereClause,
@@ -35,12 +48,52 @@ export async function GET(request: NextRequest) {
     )!;
   }
 
+  // Date range filter
+  if (dateFrom) {
+    whereClause = and(whereClause, gte(notes.createdAt, new Date(dateFrom)))!;
+  }
+  if (dateTo) {
+    // Add one day to include the entire end date
+    const endDate = new Date(dateTo);
+    endDate.setDate(endDate.getDate() + 1);
+    whereClause = and(whereClause, lte(notes.createdAt, endDate))!;
+  }
+
+  // Tag filtering: get note IDs that have any of the specified tags
+  let noteIdsWithTags: string[] | null = null;
+  if (tagIds.length > 0) {
+    const notesWithTags = await db
+      .selectDistinct({ noteId: noteTags.noteId })
+      .from(noteTags)
+      .where(inArray(noteTags.tagId, tagIds));
+    noteIdsWithTags = notesWithTags.map(n => n.noteId);
+
+    if (noteIdsWithTags.length === 0) {
+      // No notes match the tag filter
+      return NextResponse.json({
+        notes: [],
+        total: 0,
+        page,
+        limit,
+        totalPages: 0,
+      });
+    }
+    whereClause = and(whereClause, inArray(notes.id, noteIdsWithTags))!;
+  }
+
+  // Build order by clause
+  const sortColumn = sortBy === 'title' ? notes.title :
+                     sortBy === 'createdAt' ? notes.createdAt :
+                     sortBy === 'position' ? notes.position :
+                     notes.updatedAt;
+  const orderByClause = sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn);
+
   const [userNotes, countResult] = await Promise.all([
     db
       .select()
       .from(notes)
       .where(whereClause)
-      .orderBy(desc(notes.updatedAt))
+      .orderBy(orderByClause)
       .limit(limit)
       .offset(offset),
     db
