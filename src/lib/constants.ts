@@ -1,4 +1,15 @@
 /**
+ * Notification methods for reminders.
+ */
+export const NOTIFY_VIA_OPTIONS = [
+  { value: 'email', label: 'Email' },
+  { value: 'push', label: 'Push Notification' },
+  { value: 'both', label: 'Both' },
+] as const;
+
+export type NotifyVia = (typeof NOTIFY_VIA_OPTIONS)[number]['value'];
+
+/**
  * Email addresses allowed to send to the webhook for creating notes/reminders.
  * Only emails from these addresses will be processed.
  */

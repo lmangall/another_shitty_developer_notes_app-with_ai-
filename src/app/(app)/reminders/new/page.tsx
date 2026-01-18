@@ -9,11 +9,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { NOTIFY_VIA_OPTIONS, type NotifyVia } from '@/lib/constants';
 
 export default function NewReminderPage() {
   const router = useRouter();
   const [message, setMessage] = useState('');
   const [remindAt, setRemindAt] = useState('');
+  const [notifyVia, setNotifyVia] = useState<NotifyVia>('email');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -34,6 +36,7 @@ export default function NewReminderPage() {
         body: JSON.stringify({
           message,
           remindAt: remindAt || null,
+          notifyVia,
         }),
       });
 
@@ -91,6 +94,28 @@ export default function NewReminderPage() {
                 value={remindAt}
                 onChange={(e) => setRemindAt(e.target.value)}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notifyVia">Notify Via</Label>
+              <div className="flex gap-2">
+                {NOTIFY_VIA_OPTIONS.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    variant={notifyVia === option.value ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setNotifyVia(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {notifyVia === 'push' && 'Make sure push notifications are enabled in settings.'}
+                {notifyVia === 'both' && 'You will receive both email and push notification.'}
+                {notifyVia === 'email' && 'You will receive an email reminder.'}
+              </p>
             </div>
 
             <div className="flex justify-end gap-3">

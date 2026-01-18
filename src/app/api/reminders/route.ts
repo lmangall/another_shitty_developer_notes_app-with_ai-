@@ -4,6 +4,7 @@ import { eq, desc, and, sql, gte } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { logger } from '@/lib/logger';
+import { NOTIFY_VIA_OPTIONS, type NotifyVia } from '@/lib/constants';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id;
   const body = await request.json();
-  const { message, remindAt } = body;
+  const { message, remindAt, notifyVia } = body;
 
   if (!message) {
     return NextResponse.json(
@@ -79,17 +80,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Validate notifyVia if provided
+  const validNotifyVia = NOTIFY_VIA_OPTIONS.map((o) => o.value);
+  const finalNotifyVia: NotifyVia =
+    notifyVia && validNotifyVia.includes(notifyVia) ? notifyVia : 'email';
+
   const [reminder] = await db
     .insert(reminders)
     .values({
       userId,
       message,
       remindAt: remindAt ? new Date(remindAt) : null,
+      notifyVia: finalNotifyVia,
       status: 'pending',
     })
     .returning();
 
-  logger.info('Reminder created', { userId, reminderId: reminder.id });
+  logger.info('Reminder created', { userId, reminderId: reminder.id, notifyVia: finalNotifyVia });
 
   return NextResponse.json(reminder, { status: 201 });
 }

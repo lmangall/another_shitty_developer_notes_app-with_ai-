@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, reminders, users } from '@/db';
 import { eq, and, lte } from 'drizzle-orm';
 import { sendReminderEmail } from '@/lib/email';
+import { sendPushNotification } from '@/lib/push';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -40,17 +41,81 @@ export async function GET(request: NextRequest) {
 
     for (const { reminder, user } of dueReminders) {
       try {
-        // Send reminder email
-        await sendReminderEmail(user.email, reminder.message);
+        const notifyVia = reminder.notifyVia || 'email';
+        const shouldEmail = notifyVia === 'email' || notifyVia === 'both';
+        const shouldPush = notifyVia === 'push' || notifyVia === 'both';
 
-        // Update reminder status
-        await db
-          .update(reminders)
-          .set({ status: 'sent', updatedAt: new Date() })
-          .where(eq(reminders.id, reminder.id));
+        // Build notification promises based on notifyVia setting
+        const notifications: Promise<unknown>[] = [];
+        if (shouldEmail) {
+          notifications.push(sendReminderEmail(user.email, reminder.message));
+        }
+        if (shouldPush) {
+          notifications.push(
+            sendPushNotification(reminder.userId, {
+              title: '⏰ Reminder',
+              body: reminder.message,
+              icon: '/icon-192x192.png',
+              url: '/reminders',
+              tag: `reminder-${reminder.id}`,
+            })
+          );
+        }
 
-        results.push({ id: reminder.id, status: 'sent' });
-        sent++;
+        const notificationResults = await Promise.allSettled(notifications);
+
+        // Determine success based on notification type
+        let emailSent = false;
+        let pushSent = false;
+        let resultIndex = 0;
+
+        if (shouldEmail) {
+          emailSent = notificationResults[resultIndex]?.status === 'fulfilled';
+          if (!emailSent) {
+            logger.warn('Email failed for reminder', {
+              reminderId: reminder.id,
+              error: (notificationResults[resultIndex] as PromiseRejectedResult).reason,
+            });
+          }
+          resultIndex++;
+        }
+
+        if (shouldPush) {
+          const pushResult = notificationResults[resultIndex];
+          pushSent =
+            pushResult?.status === 'fulfilled' &&
+            (pushResult.value as { success: boolean }).success;
+          if (pushSent) {
+            logger.info('Push notification sent for reminder', { reminderId: reminder.id });
+          }
+        }
+
+        // Determine if reminder should be marked as sent
+        // For 'email': email must succeed
+        // For 'push': push must succeed (or no subscriptions is acceptable)
+        // For 'both': at least one must succeed
+        const success =
+          (notifyVia === 'email' && emailSent) ||
+          (notifyVia === 'push' && (pushSent || !shouldPush)) ||
+          (notifyVia === 'both' && (emailSent || pushSent));
+
+        if (success) {
+          await db
+            .update(reminders)
+            .set({ status: 'sent', updatedAt: new Date() })
+            .where(eq(reminders.id, reminder.id));
+
+          results.push({
+            id: reminder.id,
+            status: 'sent',
+            notifyVia,
+            email: shouldEmail ? emailSent : undefined,
+            push: shouldPush ? pushSent : undefined,
+          });
+          sent++;
+        } else {
+          throw new Error(`Notification delivery failed (notifyVia: ${notifyVia})`);
+        }
       } catch (error) {
         logger.error('Failed to send reminder', error, { reminderId: reminder.id, userId: reminder.userId });
         results.push({

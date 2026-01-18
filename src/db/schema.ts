@@ -80,6 +80,7 @@ export const reminders = pgTable('reminders', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   message: text('message').notNull(),
   remindAt: timestamp('remind_at'),
+  notifyVia: text('notify_via').notNull().default('email'), // email, push, both
   status: text('status').notNull().default('pending'), // pending, sent, cancelled, completed
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

@@ -4,6 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { logger } from '@/lib/logger';
+import { NOTIFY_VIA_OPTIONS, type NotifyVia } from '@/lib/constants';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -46,7 +47,7 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { message, remindAt, status } = body;
+  const { message, remindAt, status, notifyVia } = body;
 
   const [reminder] = await db
     .select()
@@ -57,12 +58,18 @@ export async function PATCH(
     return NextResponse.json({ error: 'Reminder not found' }, { status: 404 });
   }
 
+  // Validate notifyVia if provided
+  const validNotifyVia = NOTIFY_VIA_OPTIONS.map((o) => o.value);
+  const finalNotifyVia: NotifyVia | undefined =
+    notifyVia && validNotifyVia.includes(notifyVia) ? notifyVia : undefined;
+
   const [updated] = await db
     .update(reminders)
     .set({
       ...(message && { message }),
       ...(remindAt !== undefined && { remindAt: remindAt ? new Date(remindAt) : null }),
       ...(status && { status }),
+      ...(finalNotifyVia && { notifyVia: finalNotifyVia }),
       updatedAt: new Date(),
     })
     .where(eq(reminders.id, id))

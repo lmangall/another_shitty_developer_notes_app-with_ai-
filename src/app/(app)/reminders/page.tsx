@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Bell, Clock, CheckCircle, XCircle, Trash2 } from 'lucide-react';
+import { Plus, Bell, Clock, CheckCircle, XCircle, Trash2, Mail, Smartphone, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -14,11 +17,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { format, formatDistanceToNow, differenceInHours, isPast } from 'date-fns';
+import { NOTIFY_VIA_OPTIONS, type NotifyVia } from '@/lib/constants';
 
 interface Reminder {
   id: string;
   message: string;
   remindAt: string | null;
+  notifyVia: NotifyVia;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -43,6 +48,23 @@ const statusColors: Record<string, string> = {
   sent: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
   cancelled: 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
   completed: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+};
+
+const notifyViaIcons: Record<NotifyVia, React.ReactNode> = {
+  email: <Mail size={14} className="text-muted-foreground" />,
+  push: <Smartphone size={14} className="text-muted-foreground" />,
+  both: (
+    <span className="flex items-center gap-0.5">
+      <Mail size={14} className="text-muted-foreground" />
+      <Smartphone size={14} className="text-muted-foreground" />
+    </span>
+  ),
+};
+
+const notifyViaLabels: Record<NotifyVia, string> = {
+  email: 'Email',
+  push: 'Push',
+  both: 'Both',
 };
 
 function getUrgencyBadge(remindAt: string | null, status: string): { label: string; className: string } | null {
@@ -76,6 +98,11 @@ export default function RemindersPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('');
   const [deleteTarget, setDeleteTarget] = useState<Reminder | null>(null);
+  const [editTarget, setEditTarget] = useState<Reminder | null>(null);
+  const [editMessage, setEditMessage] = useState('');
+  const [editRemindAt, setEditRemindAt] = useState('');
+  const [editNotifyVia, setEditNotifyVia] = useState<NotifyVia>('email');
+  const [editLoading, setEditLoading] = useState(false);
 
   useEffect(() => {
     fetchReminders();
@@ -123,6 +150,39 @@ export default function RemindersPage() {
       fetchReminders();
     } catch (error) {
       console.error('Failed to delete reminder:', error);
+    }
+  };
+
+  const openEditDialog = (reminder: Reminder) => {
+    setEditTarget(reminder);
+    setEditMessage(reminder.message);
+    setEditRemindAt(
+      reminder.remindAt
+        ? format(new Date(reminder.remindAt), "yyyy-MM-dd'T'HH:mm")
+        : ''
+    );
+    setEditNotifyVia(reminder.notifyVia || 'email');
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    setEditLoading(true);
+    try {
+      await fetch(`/api/reminders/${editTarget.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: editMessage,
+          remindAt: editRemindAt || null,
+          notifyVia: editNotifyVia,
+        }),
+      });
+      setEditTarget(null);
+      fetchReminders();
+    } catch (error) {
+      console.error('Failed to update reminder:', error);
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -179,6 +239,10 @@ export default function RemindersPage() {
                       >
                         {reminder.status}
                       </span>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        {notifyViaIcons[reminder.notifyVia || 'email']}
+                        <span>{notifyViaLabels[reminder.notifyVia || 'email']}</span>
+                      </span>
                       {(() => {
                         const urgency = getUrgencyBadge(reminder.remindAt, reminder.status);
                         return urgency ? (
@@ -199,6 +263,13 @@ export default function RemindersPage() {
                   <div className="flex gap-2">
                     {reminder.status === 'pending' && (
                       <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditDialog(reminder)}
+                        >
+                          <Pencil size={16} />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -275,6 +346,61 @@ export default function RemindersPage() {
               onClick={() => deleteTarget && deleteReminder(deleteTarget.id)}
             >
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Reminder</DialogTitle>
+            <DialogDescription>
+              Update your reminder details below.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-message">Message</Label>
+              <Textarea
+                id="edit-message"
+                value={editMessage}
+                onChange={(e) => setEditMessage(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-remindAt">Remind At</Label>
+              <Input
+                id="edit-remindAt"
+                type="datetime-local"
+                value={editRemindAt}
+                onChange={(e) => setEditRemindAt(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Notify Via</Label>
+              <div className="flex gap-2">
+                {NOTIFY_VIA_OPTIONS.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    variant={editNotifyVia === option.value ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setEditNotifyVia(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setEditTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveEdit} disabled={editLoading || !editMessage.trim()}>
+              {editLoading ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
