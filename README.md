@@ -55,10 +55,14 @@ Solution: **UptimeRobot** pings `/api/cron/check-reminders` for free. It's meant
 - Web Push API
 
 
+What shows in images is not actual notes, just seeded data to test UI of markdown rendering, notes sizes and such
+
 <img width="537" height="417" alt="Screenshot 2026-01-18 at 20 30 11" src="https://github.com/user-attachments/assets/8121e881-146c-4460-9dfe-ec48891db0bb" />
 
 
-<img width="1198" height="677" alt="Screenshot 2026-01-18 at 20 30 52" src="https://github.com/user-attachments/assets/8f7d70a8-c198-4a4d-bac0-f765433ee6fa" />
+<img width="1693" height="1205" alt="Screenshot 2026-01-18 at 21 09 49" src="https://github.com/user-attachments/assets/94d4d425-e440-44fb-8643-c57f5461567d" />
+
+<img width="1715" height="1205" alt="Screenshot 2026-01-18 at 21 10 29" src="https://github.com/user-attachments/assets/621d6999-5603-420f-8a90-3f63b82f82a0" />
 
 
 <img width="260" height="365" alt="Screenshot 2026-01-18 at 20 31 07" src="https://github.com/user-attachments/assets/31a5e4e3-ce61-49b1-8867-4a9ff682f546" />
