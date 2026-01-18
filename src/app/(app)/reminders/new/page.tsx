@@ -2,22 +2,35 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import Link from 'next/link';
+import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Calendar } from '@/components/ui/calendar';
 import { NOTIFY_VIA_OPTIONS, type NotifyVia } from '@/lib/constants';
 
 export default function NewReminderPage() {
   const router = useRouter();
   const [message, setMessage] = useState('');
-  const [remindAt, setRemindAt] = useState('');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedTime, setSelectedTime] = useState('09:00');
   const [notifyVia, setNotifyVia] = useState<NotifyVia>('email');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showCalendarMobile, setShowCalendarMobile] = useState(false);
+
+  // Combine date and time into ISO string for submission
+  const getRemindAtValue = () => {
+    if (!selectedDate) return null;
+    const [hours, minutes] = selectedTime.split(':').map(Number);
+    const combined = new Date(selectedDate);
+    combined.setHours(hours, minutes, 0, 0);
+    return combined.toISOString();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +48,7 @@ export default function NewReminderPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message,
-          remindAt: remindAt || null,
+          remindAt: getRemindAtValue(),
           notifyVia,
         }),
       });
@@ -86,14 +99,80 @@ export default function NewReminderPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="remindAt">Remind At (optional)</Label>
-              <Input
-                id="remindAt"
-                type="datetime-local"
-                value={remindAt}
-                onChange={(e) => setRemindAt(e.target.value)}
-              />
+            <div className="space-y-3">
+              <Label>Remind At (optional)</Label>
+
+              {/* Mobile: Collapsible calendar */}
+              <div className="md:hidden">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => setShowCalendarMobile(!showCalendarMobile)}
+                >
+                  <span>
+                    {selectedDate ? format(selectedDate, 'PPP') : 'Select a date'}
+                  </span>
+                  {showCalendarMobile ? (
+                    <ChevronUp className="size-4" />
+                  ) : (
+                    <ChevronDown className="size-4" />
+                  )}
+                </Button>
+                {showCalendarMobile && (
+                  <div className="mt-2 rounded-md border bg-card p-2">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop: Always visible calendar */}
+              <div className="hidden md:block rounded-md border bg-card">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                  disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                  className="mx-auto"
+                />
+              </div>
+
+              {/* Time input - show when date is selected */}
+              {selectedDate && (
+                <div className="flex items-center gap-3">
+                  <Label htmlFor="time" className="shrink-0">
+                    Time:
+                  </Label>
+                  <Input
+                    id="time"
+                    type="time"
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                    className="w-32"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {format(selectedDate, 'EEE, MMM d')} at {selectedTime}
+                  </span>
+                </div>
+              )}
+
+              {/* Clear button */}
+              {selectedDate && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedDate(undefined)}
+                  className="text-muted-foreground"
+                >
+                  Clear date
+                </Button>
+              )}
             </div>
 
             <div className="space-y-2">
