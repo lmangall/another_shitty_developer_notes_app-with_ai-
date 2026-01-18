@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { processWithAgent, getUserContext, type AgentResponse, type ToolExecutionResult } from '@/lib/ai';
 import type { NewEmailLog } from '@/db/schema';
 import crypto from 'crypto';
+import { isEmailWhitelisted } from '@/lib/constants';
 
 // Verify Resend webhook signature
 function verifySignature(payload: string, signature: string, secret: string): boolean {
@@ -77,6 +78,13 @@ export async function POST(request: NextRequest) {
 
   const { from, to, subject, text, html } = data;
 
+  // Check if sender email is whitelisted
+  const fromEmail = Array.isArray(from) ? from[0] : from;
+  if (!isEmailWhitelisted(fromEmail)) {
+    console.warn('Email from non-whitelisted address rejected:', fromEmail);
+    return NextResponse.json({ error: 'Sender not authorized' }, { status: 403 });
+  }
+
   // Extract user ID from email address (format: {user-id}@domain.com)
   const toAddress = Array.isArray(to) ? to[0] : to;
   const match = toAddress.match(/^([^@]+)@/);
@@ -97,7 +105,6 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     // Try to find by email
-    const fromEmail = Array.isArray(from) ? from[0] : from;
     user = await db
       .select()
       .from(users)
@@ -116,7 +123,7 @@ export async function POST(request: NextRequest) {
 
   const emailLog: NewEmailLog = {
     userId: user.id,
-    fromEmail: Array.isArray(from) ? from[0] : from,
+    fromEmail,
     toEmail: toAddress,
     subject: subject || null,
     body: emailBody,
