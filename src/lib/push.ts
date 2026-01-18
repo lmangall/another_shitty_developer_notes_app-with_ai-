@@ -6,15 +6,23 @@ import { logger } from '@/lib/logger';
 
 // VAPID keys - generate these once and store in env vars
 // You can generate using: npx web-push generate-vapid-keys
-const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY?.trim();
 
-if (vapidPublicKey && vapidPrivateKey) {
-  webpush.setVapidDetails(
-    'mailto:' + (process.env.VAPID_EMAIL || 'noreply@example.com'),
-    vapidPublicKey,
-    vapidPrivateKey
-  );
+let vapidConfigured = false;
+
+// Only configure VAPID if keys are present and look valid (non-empty, no padding)
+if (vapidPublicKey && vapidPrivateKey && vapidPublicKey.length > 10 && !vapidPublicKey.includes('=')) {
+  try {
+    webpush.setVapidDetails(
+      'mailto:' + (process.env.VAPID_EMAIL || 'noreply@example.com'),
+      vapidPublicKey,
+      vapidPrivateKey
+    );
+    vapidConfigured = true;
+  } catch {
+    // VAPID configuration failed - push notifications will be disabled
+  }
 }
 
 export interface PushPayload {
@@ -26,7 +34,7 @@ export interface PushPayload {
 }
 
 export async function sendPushNotification(userId: string, payload: PushPayload) {
-  if (!vapidPublicKey || !vapidPrivateKey) {
+  if (!vapidConfigured) {
     logger.warn('VAPID keys not configured, skipping push notification');
     return { success: false, error: 'VAPID keys not configured' };
   }
