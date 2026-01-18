@@ -6,8 +6,10 @@ import { logger } from '@/lib/logger';
 
 // VAPID keys - generate these once and store in env vars
 // You can generate using: npx web-push generate-vapid-keys
-const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+// Clean keys: remove whitespace AND literal \n strings (Vercel env var issue)
+const cleanKey = (key: string | undefined) => key?.trim().replace(/\\n/g, '').replace(/\n/g, '');
+const vapidPublicKey = cleanKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+const vapidPrivateKey = cleanKey(process.env.VAPID_PRIVATE_KEY);
 
 let vapidConfigured = false;
 
