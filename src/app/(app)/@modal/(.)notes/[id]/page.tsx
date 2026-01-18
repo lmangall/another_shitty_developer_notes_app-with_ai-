@@ -30,7 +30,7 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
   const router = useRouter();
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(true);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
@@ -102,12 +102,11 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
       });
 
       if (!res.ok) throw new Error('Failed to update note');
-      const updated = await res.json();
-      setNote(updated);
-      setEditing(false);
+      // Close modal and refresh the notes list to show changes
+      router.back();
+      router.refresh();
     } catch (error) {
       console.error('Failed to save note:', error);
-    } finally {
       setSaving(false);
     }
   };
