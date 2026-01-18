@@ -39,7 +39,11 @@ export const auth = betterAuth({
     },
   },
   socialProviders: {},
-  trustedOrigins: process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL] : [],
+  trustedOrigins: [
+    process.env.BETTER_AUTH_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+    'http://localhost:3000',
+  ].filter(Boolean) as string[],
 });
 
 export type Session = typeof auth.$Infer.Session;
