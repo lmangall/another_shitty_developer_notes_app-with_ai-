@@ -79,3 +79,27 @@ export const SORT_ORDER_OPTIONS = [
 ] as const;
 
 export type SortOrder = (typeof SORT_ORDER_OPTIONS)[number]['value'];
+
+/**
+ * Sort options for reminders.
+ */
+export const REMINDER_SORT_OPTIONS = [
+  { value: 'remindAt', label: 'Remind At' },
+  { value: 'createdAt', label: 'Created Date' },
+  { value: 'status', label: 'Status' },
+  { value: 'message', label: 'Message' },
+] as const;
+
+export type ReminderSortOption = (typeof REMINDER_SORT_OPTIONS)[number]['value'];
+
+/**
+ * Status options for reminders.
+ */
+export const REMINDER_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+] as const;
+
+export type ReminderStatus = (typeof REMINDER_STATUS_OPTIONS)[number]['value'];

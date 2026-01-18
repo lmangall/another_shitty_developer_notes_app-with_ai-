@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, reminders } from '@/db';
-import { eq, desc, and, sql, gte } from 'drizzle-orm';
+import { eq, desc, asc, and, sql, gte } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { logger } from '@/lib/logger';
-import { NOTIFY_VIA_OPTIONS, type NotifyVia } from '@/lib/constants';
+import { NOTIFY_VIA_OPTIONS, type NotifyVia, type ReminderSortOption } from '@/lib/constants';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -21,15 +21,22 @@ export async function GET(request: NextRequest) {
 
   const searchParams = request.nextUrl.searchParams;
   const status = searchParams.get('status');
+  const notifyVia = searchParams.get('notifyVia');
   const upcoming = searchParams.get('upcoming') === 'true';
   const page = parseInt(searchParams.get('page') || '1');
   const limit = parseInt(searchParams.get('limit') || '20');
   const offset = (page - 1) * limit;
+  const sortBy = (searchParams.get('sortBy') || 'remindAt') as ReminderSortOption;
+  const sortOrder = searchParams.get('sortOrder') || 'asc';
 
   let whereClause = eq(reminders.userId, session.user.id);
 
   if (status) {
     whereClause = and(whereClause, eq(reminders.status, status))!;
+  }
+
+  if (notifyVia) {
+    whereClause = and(whereClause, eq(reminders.notifyVia, notifyVia as NotifyVia))!;
   }
 
   if (upcoming) {
@@ -40,12 +47,22 @@ export async function GET(request: NextRequest) {
     )!;
   }
 
+  // Build order by clause
+  const sortColumn = {
+    remindAt: reminders.remindAt,
+    createdAt: reminders.createdAt,
+    status: reminders.status,
+    message: reminders.message,
+  }[sortBy] || reminders.remindAt;
+
+  const orderFn = sortOrder === 'desc' ? desc : asc;
+
   const [userReminders, countResult] = await Promise.all([
     db
       .select()
       .from(reminders)
       .where(whereClause)
-      .orderBy(desc(reminders.remindAt))
+      .orderBy(orderFn(sortColumn))
       .limit(limit)
       .offset(offset),
     db

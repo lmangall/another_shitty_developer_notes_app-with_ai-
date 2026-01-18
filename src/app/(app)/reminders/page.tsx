@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Bell, Clock, CheckCircle, XCircle, Trash2, Mail, Smartphone, Pencil } from 'lucide-react';
+import { Plus, Bell, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,8 +16,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { format, formatDistanceToNow, differenceInHours, isPast } from 'date-fns';
-import { NOTIFY_VIA_OPTIONS, type NotifyVia } from '@/lib/constants';
+import { format } from 'date-fns';
+import { RemindersTable } from '@/components/reminders/reminders-table';
+import { RemindersFilterBar } from '@/components/reminders/reminders-filter-bar';
+import { ReminderCard } from '@/components/reminders/reminder-card';
+import { ViewToggle } from '@/components/notes/view-toggle';
+import {
+  NOTIFY_VIA_OPTIONS,
+  type NotifyVia,
+  type ReminderSortOption,
+  type SortOrder,
+  type ReminderStatus,
+  type ViewOption,
+} from '@/lib/constants';
+
+const VIEW_STORAGE_KEY = 'reminders-view-preference';
 
 interface Reminder {
   id: string;
@@ -36,77 +49,49 @@ interface RemindersResponse {
   totalPages: number;
 }
 
-const statusIcons: Record<string, React.ReactNode> = {
-  pending: <Clock size={16} className="text-yellow-500" />,
-  sent: <CheckCircle size={16} className="text-green-500" />,
-  cancelled: <XCircle size={16} className="text-gray-400" />,
-  completed: <CheckCircle size={16} className="text-blue-500" />,
-};
-
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
-  sent: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
-  cancelled: 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
-  completed: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-};
-
-const notifyViaIcons: Record<NotifyVia, React.ReactNode> = {
-  email: <Mail size={14} className="text-muted-foreground" />,
-  push: <Smartphone size={14} className="text-muted-foreground" />,
-  both: (
-    <span className="flex items-center gap-0.5">
-      <Mail size={14} className="text-muted-foreground" />
-      <Smartphone size={14} className="text-muted-foreground" />
-    </span>
-  ),
-};
-
-const notifyViaLabels: Record<NotifyVia, string> = {
-  email: 'Email',
-  push: 'Push',
-  both: 'Both',
-};
-
-function getUrgencyBadge(remindAt: string | null, status: string): { label: string; className: string } | null {
-  if (status !== 'pending' || !remindAt) return null;
-
-  const reminderDate = new Date(remindAt);
-
-  if (isPast(reminderDate)) {
-    return { label: 'Overdue', className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
-  }
-
-  const hoursUntil = differenceInHours(reminderDate, new Date());
-
-  if (hoursUntil <= 1) {
-    return { label: 'Due very soon', className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
-  }
-  if (hoursUntil <= 24) {
-    return { label: `Due in ${formatDistanceToNow(reminderDate)}`, className: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300' };
-  }
-  if (hoursUntil <= 72) {
-    return { label: `Due in ${formatDistanceToNow(reminderDate)}`, className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
-  }
-
-  return null;
-}
-
 export default function RemindersPage() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>('');
+
+  // View
+  const [view, setView] = useState<ViewOption>('grid');
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<ReminderStatus | ''>('');
+  const [notifyViaFilter, setNotifyViaFilter] = useState<NotifyVia | ''>('');
+  const [sortBy, setSortBy] = useState<ReminderSortOption>('remindAt');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+
+  // Selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Dialogs
   const [deleteTarget, setDeleteTarget] = useState<Reminder | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Reminder | null>(null);
   const [editMessage, setEditMessage] = useState('');
   const [editRemindAt, setEditRemindAt] = useState('');
   const [editNotifyVia, setEditNotifyVia] = useState<NotifyVia>('email');
   const [editLoading, setEditLoading] = useState(false);
 
+  // Load view preference from localStorage
+  useEffect(() => {
+    const savedView = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (savedView === 'grid' || savedView === 'table') {
+      setView(savedView);
+    }
+  }, []);
+
+  function handleViewChange(newView: ViewOption) {
+    setView(newView);
+    localStorage.setItem(VIEW_STORAGE_KEY, newView);
+  }
+
   useEffect(() => {
     fetchReminders();
-  }, [page, filter]);
+  }, [page, statusFilter, notifyViaFilter, sortBy, sortOrder]);
 
   const fetchReminders = async () => {
     setLoading(true);
@@ -114,13 +99,18 @@ export default function RemindersPage() {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '20',
+        sortBy,
+        sortOrder,
       });
-      if (filter) params.set('status', filter);
+      if (statusFilter) params.set('status', statusFilter);
+      if (notifyViaFilter) params.set('notifyVia', notifyViaFilter);
 
       const res = await fetch(`/api/reminders?${params}`);
       const data: RemindersResponse = await res.json();
       setReminders(data.reminders);
       setTotalPages(data.totalPages);
+      // Clear selection when data changes
+      setSelectedIds(new Set());
     } catch (error) {
       console.error('Failed to fetch reminders:', error);
     } finally {
@@ -153,6 +143,21 @@ export default function RemindersPage() {
     }
   };
 
+  const bulkDelete = async () => {
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id =>
+          fetch(`/api/reminders/${id}`, { method: 'DELETE' })
+        )
+      );
+      setBulkDeleteOpen(false);
+      setSelectedIds(new Set());
+      fetchReminders();
+    } catch (error) {
+      console.error('Failed to delete reminders:', error);
+    }
+  };
+
   const openEditDialog = (reminder: Reminder) => {
     setEditTarget(reminder);
     setEditMessage(reminder.message);
@@ -168,8 +173,6 @@ export default function RemindersPage() {
     if (!editTarget) return;
     setEditLoading(true);
     try {
-      // Convert local datetime string to ISO (UTC) before sending to server
-      // This ensures the server receives the correct UTC time regardless of server timezone
       const remindAtISO = editRemindAt ? new Date(editRemindAt).toISOString() : null;
 
       await fetch(`/api/reminders/${editTarget.id}`, {
@@ -190,8 +193,28 @@ export default function RemindersPage() {
     }
   };
 
+  const handleSortChange = (column: ReminderSortOption) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
+    setPage(1);
+  };
+
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-foreground">Reminders</h1>
         <Link href="/reminders/new">
@@ -202,20 +225,33 @@ export default function RemindersPage() {
         </Link>
       </div>
 
-      <div className="flex gap-2 mb-6">
-        {['', 'pending', 'sent', 'completed', 'cancelled'].map((status) => (
-          <Button
-            key={status}
-            variant={filter === status ? 'default' : 'secondary'}
-            size="sm"
-            onClick={() => {
-              setFilter(status);
-              setPage(1);
-            }}
-          >
-            {status || 'All'}
-          </Button>
-        ))}
+      {/* Filters, View Toggle, and Bulk Actions */}
+      <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
+        <RemindersFilterBar
+          statusFilter={statusFilter}
+          onStatusFilterChange={(s) => { setStatusFilter(s); setPage(1); }}
+          notifyViaFilter={notifyViaFilter}
+          onNotifyViaFilterChange={(n) => { setNotifyViaFilter(n); setPage(1); }}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSortByChange={setSortBy}
+          onSortOrderChange={setSortOrder}
+        />
+
+        <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteOpen(true)}
+              className="gap-2"
+            >
+              <Trash2 size={14} />
+              Delete {selectedIds.size} selected
+            </Button>
+          )}
+          <ViewToggle view={view} onViewChange={handleViewChange} />
+        </div>
       </div>
 
       {loading ? (
@@ -229,79 +265,30 @@ export default function RemindersPage() {
             <p className="text-muted-foreground">No reminders yet. Create your first reminder!</p>
           </CardContent>
         </Card>
+      ) : view === 'table' ? (
+        <RemindersTable
+          reminders={reminders}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSortChange={handleSortChange}
+          onDelete={setDeleteTarget}
+          onEdit={openEditDialog}
+          onStatusChange={updateStatus}
+        />
       ) : (
         <div className="space-y-4">
           {reminders.map((reminder) => (
-            <Card key={reminder.id}>
-              <CardContent className="py-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      {statusIcons[reminder.status]}
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${statusColors[reminder.status]}`}
-                      >
-                        {reminder.status}
-                      </span>
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        {notifyViaIcons[reminder.notifyVia || 'email']}
-                        <span>{notifyViaLabels[reminder.notifyVia || 'email']}</span>
-                      </span>
-                      {(() => {
-                        const urgency = getUrgencyBadge(reminder.remindAt, reminder.status);
-                        return urgency ? (
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${urgency.className}`}>
-                            {urgency.label}
-                          </span>
-                        ) : null;
-                      })()}
-                    </div>
-                    <p className="text-foreground mb-2">{reminder.message}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {reminder.remindAt
-                        ? `Remind at: ${format(new Date(reminder.remindAt), 'MMM d, yyyy h:mm a')}`
-                        : 'No time set'}
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    {reminder.status === 'pending' && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(reminder)}
-                        >
-                          <Pencil size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => updateStatus(reminder.id, 'completed')}
-                        >
-                          Complete
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => updateStatus(reminder.id, 'cancelled')}
-                        >
-                          Cancel
-                        </Button>
-                      </>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setDeleteTarget(reminder)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <ReminderCard
+              key={reminder.id}
+              reminder={reminder}
+              selected={selectedIds.has(reminder.id)}
+              onSelect={toggleSelection}
+              onDelete={setDeleteTarget}
+              onEdit={openEditDialog}
+              onStatusChange={updateStatus}
+            />
           ))}
         </div>
       )}
@@ -328,6 +315,7 @@ export default function RemindersPage() {
         </div>
       )}
 
+      {/* Single Delete Dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent>
           <DialogHeader>
@@ -355,6 +343,27 @@ export default function RemindersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Bulk Delete Dialog */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {selectedIds.size} Reminders</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {selectedIds.size} reminders? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setBulkDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={bulkDelete}>
+              Delete {selectedIds.size} Reminders
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
       <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
