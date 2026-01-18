@@ -12,6 +12,7 @@ function getResend() {
 }
 
 export const auth = betterAuth({
+  trustedProxyOrigins: true,
   database: drizzleAdapter(db, {
     provider: 'pg',
     schema: {
