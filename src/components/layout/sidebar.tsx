@@ -82,6 +82,12 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
           Sign Out
         </Button>
       </div>
+
+      {process.env.NEXT_PUBLIC_BUILD_TIME && (
+        <div className="px-4 pb-4 text-xs text-sidebar-foreground/50">
+          Deployed: {new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString()}
+        </div>
+      )}
     </>
   );
 }
