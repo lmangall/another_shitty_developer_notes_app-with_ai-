@@ -3,6 +3,7 @@ import { db, notes } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
+import { logger } from '@/lib/logger';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -66,6 +67,8 @@ export async function PATCH(
     .where(eq(notes.id, id))
     .returning();
 
+  logger.info('Note updated', { userId: session.user.id, noteId: id });
+
   return NextResponse.json(updated);
 }
 
@@ -90,6 +93,8 @@ export async function DELETE(
   }
 
   await db.delete(notes).where(eq(notes.id, id));
+
+  logger.info('Note deleted', { userId: session.user.id, noteId: id });
 
   return NextResponse.json({ success: true });
 }

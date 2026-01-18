@@ -3,6 +3,7 @@ import { db, notes } from '@/db';
 import { eq, desc, ilike, or, and, sql } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
+import { logger } from '@/lib/logger';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const userId = session.user.id;
   const body = await request.json();
   const { title, content } = body;
 
@@ -76,11 +78,13 @@ export async function POST(request: NextRequest) {
   const [note] = await db
     .insert(notes)
     .values({
-      userId: session.user.id,
+      userId,
       title,
       content,
     })
     .returning();
+
+  logger.info('Note created', { userId, noteId: note.id });
 
   return NextResponse.json(note, { status: 201 });
 }

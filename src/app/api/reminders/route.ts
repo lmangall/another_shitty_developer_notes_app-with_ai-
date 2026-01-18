@@ -3,6 +3,7 @@ import { db, reminders } from '@/db';
 import { eq, desc, and, sql, gte } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
+import { logger } from '@/lib/logger';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const userId = session.user.id;
   const body = await request.json();
   const { message, remindAt } = body;
 
@@ -80,12 +82,14 @@ export async function POST(request: NextRequest) {
   const [reminder] = await db
     .insert(reminders)
     .values({
-      userId: session.user.id,
+      userId,
       message,
       remindAt: remindAt ? new Date(remindAt) : null,
       status: 'pending',
     })
     .returning();
+
+  logger.info('Reminder created', { userId, reminderId: reminder.id });
 
   return NextResponse.json(reminder, { status: 201 });
 }

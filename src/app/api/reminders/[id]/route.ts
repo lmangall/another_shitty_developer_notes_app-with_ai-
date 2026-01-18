@@ -3,6 +3,7 @@ import { db, reminders } from '@/db';
 import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
+import { logger } from '@/lib/logger';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -67,6 +68,8 @@ export async function PATCH(
     .where(eq(reminders.id, id))
     .returning();
 
+  logger.info('Reminder updated', { userId: session.user.id, reminderId: id });
+
   return NextResponse.json(updated);
 }
 
@@ -91,6 +94,8 @@ export async function DELETE(
   }
 
   await db.delete(reminders).where(eq(reminders.id, id));
+
+  logger.info('Reminder deleted', { userId: session.user.id, reminderId: id });
 
   return NextResponse.json({ success: true });
 }

@@ -254,6 +254,45 @@ refactor: simplify form validation
 
 ---
 
+## Server-Side Logging
+
+**Always use the logger for server-side code** (API routes, server actions, cron jobs). Never use bare `console.log()` statements.
+
+```typescript
+import { logger, createLogger } from '@/lib/logger';
+
+// Basic usage
+logger.info('User created note', { userId, noteId });
+logger.warn('Rate limit approaching', { userId, count: 95 });
+logger.error('Failed to send email', error, { userId, reminderId });
+logger.debug('Query result', { query, resultCount }); // Only logs in development
+
+// Create a logger with pre-bound context (recommended for API routes)
+export async function POST(request: Request) {
+  const log = createLogger({ requestId: crypto.randomUUID() });
+
+  log.info('Processing request');
+  // All subsequent logs include requestId automatically
+}
+```
+
+**When to log:**
+- API route entry/exit with key parameters
+- Database operations (especially mutations)
+- External service calls (AI, email)
+- Errors with full context
+- Cron job execution summaries
+
+**Best Practices:**
+- Include `userId` in context when available
+- Use `createLogger()` with `requestId` for request tracing
+- Log errors with the actual Error object for stack traces
+- Use `debug` level for verbose development-only logs
+- Never log sensitive data (passwords, tokens, full emails)
+- **Add logging to new features** - when adding API routes or server actions, include appropriate logs
+
+---
+
 ## Slash Commands
 
 Available via `/command`:
@@ -280,6 +319,7 @@ src/
 │   ├── auth.ts          # Better Auth config
 │   ├── auth-client.ts   # Client auth
 │   ├── ai.ts            # AI processing
-│   └── email.ts         # Resend email
+│   ├── email.ts         # Resend email
+│   └── logger.ts        # Server-side logging
 └── types/               # TypeScript types
 ```
