@@ -16,6 +16,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Notes App",
   description: "AI-powered note-taking with email integration",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Notes App",
+  },
 };
 
 export default function RootLayout({
