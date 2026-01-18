@@ -312,6 +312,19 @@ refactor: simplify form validation
 - Use parameterized queries (Drizzle handles this)
 - Be careful with SQL queries (avoid injection)
 
+### Vercel Environment Variables
+
+When adding env vars to Vercel, **avoid trailing `\n` characters**. Use `printf` instead of `echo`:
+```bash
+# Wrong - echo adds newline
+echo "value" | vercel env add VAR_NAME production
+
+# Correct - printf with %s avoids newline
+printf '%s' 'value' | vercel env add VAR_NAME production
+```
+
+The `cleanKey()` function in `src/lib/push.ts` strips these characters at runtime as a safeguard.
+
 ---
 
 ## Server-Side Logging
