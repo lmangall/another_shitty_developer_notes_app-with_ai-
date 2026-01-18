@@ -1,7 +1,7 @@
 import { generateText } from 'ai';
 import { gateway } from '@ai-sdk/gateway';
 import { z } from 'zod';
-import { db, notes, reminders } from '@/db';
+import { db, notes, reminders, tags, noteTags } from '@/db';
 import { eq, desc, and, ilike, or } from 'drizzle-orm';
 
 // Use Vercel AI Gateway with claude
@@ -11,10 +11,11 @@ const model = gateway('anthropic/claude-sonnet-4.5');
 export interface UserContext {
   notes: { id: string; title: string; preview: string; updatedAt: Date }[];
   reminders: { id: string; message: string; remindAt: Date | null; status: string }[];
+  tags: { id: string; name: string; color: string }[];
 }
 
 export async function getUserContext(userId: string): Promise<UserContext> {
-  const [userNotes, userReminders] = await Promise.all([
+  const [userNotes, userReminders, userTags] = await Promise.all([
     db
       .select({
         id: notes.id,
@@ -37,6 +38,15 @@ export async function getUserContext(userId: string): Promise<UserContext> {
       .where(eq(reminders.userId, userId))
       .orderBy(desc(reminders.createdAt))
       .limit(20),
+    db
+      .select({
+        id: tags.id,
+        name: tags.name,
+        color: tags.color,
+      })
+      .from(tags)
+      .where(eq(tags.userId, userId))
+      .orderBy(tags.name),
   ]);
 
   return {
@@ -52,6 +62,7 @@ export async function getUserContext(userId: string): Promise<UserContext> {
       remindAt: r.remindAt,
       status: r.status,
     })),
+    tags: userTags,
   };
 }
 
@@ -79,6 +90,14 @@ function formatContextForPrompt(context: UserContext): string {
     contextStr += '\n\nYou have no existing reminders.\n';
   }
 
+  if (context.tags.length > 0) {
+    contextStr += '\n\nYour available Tags:\n';
+    contextStr += context.tags.map(t => t.name).join(', ');
+    contextStr += '\n';
+  } else {
+    contextStr += '\n\nYou have no tags yet.\n';
+  }
+
   return contextStr;
 }
 
@@ -86,6 +105,7 @@ function formatContextForPrompt(context: UserContext): string {
 const createNoteSchema = z.object({
   title: z.string().describe('A concise, descriptive title for the note'),
   content: z.string().describe('The full content of the note, formatted as clean markdown if appropriate'),
+  tags: z.array(z.string()).optional().describe('1-3 relevant tag names from the user\'s available tags to assign to this note'),
 });
 
 const editNoteSchema = z.object({
@@ -130,22 +150,47 @@ export interface AgentResponse {
 }
 
 // Create tools with execute functions for AI SDK v6
-function createTools(userId: string) {
+function createTools(userId: string, userTags: { id: string; name: string }[]) {
   return {
     createNote: {
-      description: 'Create a new note with a title and content. Use this when the user wants to save information, write something down, or create a new note.',
+      description: 'Create a new note with a title and content. Use this when the user wants to save information, write something down, or create a new note. When creating a note, suggest 1-3 relevant tags from the user\'s available tags.',
       inputSchema: createNoteSchema,
-      execute: async ({ title, content }: z.infer<typeof createNoteSchema>): Promise<ToolExecutionResult> => {
+      execute: async ({ title, content, tags: tagNames }: z.infer<typeof createNoteSchema>): Promise<ToolExecutionResult> => {
         try {
           const [note] = await db
             .insert(notes)
             .values({ userId, title, content })
             .returning();
+
+          // Link suggested tags to the note
+          const assignedTags: string[] = [];
+          if (tagNames && tagNames.length > 0) {
+            // Find matching tags by name (case-insensitive)
+            const matchingTags = userTags.filter(t =>
+              tagNames.some(name => name.toLowerCase() === t.name.toLowerCase())
+            );
+
+            if (matchingTags.length > 0) {
+              await db.insert(noteTags).values(
+                matchingTags.map(tag => ({
+                  noteId: note.id,
+                  tagId: tag.id,
+                }))
+              );
+              assignedTags.push(...matchingTags.map(t => t.name));
+            }
+          }
+
+          let message = `Created note: "${note.title}"`;
+          if (assignedTags.length > 0) {
+            message += ` with tags: ${assignedTags.join(', ')}`;
+          }
+
           return {
             success: true,
             action: 'createNote',
-            message: `Created note: "${note.title}"`,
-            data: { noteId: note.id, title: note.title },
+            message,
+            data: { noteId: note.id, title: note.title, tags: assignedTags },
           };
         } catch (error) {
           return {
@@ -380,7 +425,7 @@ export async function processWithAgent(
   });
 
   const contextStr = formatContextForPrompt(context);
-  const tools = createTools(userId);
+  const tools = createTools(userId, context.tags);
 
   const systemPrompt = `You are a helpful assistant that manages notes and reminders for the user.
 You have access to tools to create, edit, and delete notes, as well as create and cancel reminders.
@@ -390,6 +435,8 @@ Timezone: ${timezone} (${offsetString})
 
 IMPORTANT for reminders: When the user specifies a time, convert it to an ISO datetime string accounting for their timezone (${timezone}).
 For relative times like "in 2 hours" or "tomorrow at 3pm", calculate the actual datetime based on the current time.
+
+IMPORTANT for notes: When creating a note, analyze the content and suggest 1-3 relevant tags from the user's available tags. Only use tags that exist in the user's tag list.
 
 ${contextStr}
 
