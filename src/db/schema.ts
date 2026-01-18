@@ -55,6 +55,8 @@ export const notes = pgTable('notes', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   content: text('content').notNull(),
+  cardColSpan: integer('card_col_span').notNull().default(1),
+  cardRowSpan: integer('card_row_span').notNull().default(1),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
