@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Edit2, Trash2, Save, X } from 'lucide-react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -167,7 +168,7 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
             />
           ) : (
             <div className="prose prose-sm max-w-none">
-              <ReactMarkdown>{note.content}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
             </div>
           )}
         </CardContent>

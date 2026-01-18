@@ -144,6 +144,46 @@ npm run db:studio    # Open Drizzle Studio
 
 ---
 
+## Direct Database Insertion (via Claude)
+
+When the user asks to create notes, reminders, or tags directly via prompt, write and execute a TypeScript script inline.
+
+### Script Template
+```typescript
+import { drizzle } from 'drizzle-orm/neon-http';
+import { neon } from '@neondatabase/serverless';
+import { users, notes, tags, noteTags, reminders } from '../src/db/schema';
+import * as dotenv from 'dotenv';
+dotenv.config({ path: '.env' });
+
+const sql = neon(process.env.DATABASE_URL!);
+const db = drizzle(sql);
+
+// Get user: const [user] = await db.select().from(users).limit(1);
+// Then use user.id for userId in inserts
+```
+
+Run with: `npx tsx <script.ts>`
+
+### Notes
+- **title**: Short descriptive title
+- **content**: Always use **markdown** (headers, lists, code blocks, tables, bold, etc.)
+- **tags**: Auto-assign relevant tags based on content. Reuse existing tags or create new ones.
+
+### Reminders
+- **message**: The reminder text
+- **remindAt**: DateTime for when to trigger (can be null)
+- **notifyVia**: `email`, `push`, or `both`
+- **status**: `pending` (default), `sent`, `cancelled`, `completed`
+
+### Tags
+Tags are dynamic and user-specific. When creating:
+- Choose descriptive names (Work, Personal, Health, Finance, Learning, Ideas, Project, Urgent, etc.)
+- Assign distinct hex colors: `#ef4444` (red), `#3b82f6` (blue), `#f59e0b` (amber), `#10b981` (emerald), `#ec4899` (pink), `#8b5cf6` (violet), `#06b6d4` (cyan), `#dc2626` (red-600)
+- Link to notes via `noteTags` junction table (noteId, tagId)
+
+---
+
 ## Resend Email
 
 ```typescript

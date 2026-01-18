@@ -230,3 +230,53 @@
   margin-top: 2em;
   margin-bottom: 2em;
 }
+
+/* Table styles for GFM */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1em;
+  margin-bottom: 1em;
+  font-size: 0.875em;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--border);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+
+.prose th {
+  background-color: var(--muted);
+  font-weight: 600;
+}
+
+.prose tr:nth-child(even) {
+  background-color: var(--muted);
+}
+
+/* Checklist/task list styles for GFM */
+.prose ul:has(input[type="checkbox"]) {
+  list-style-type: none;
+  padding-left: 0;
+}
+
+.prose li:has(> input[type="checkbox"]) {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.prose input[type="checkbox"] {
+  margin-top: 0.3em;
+  width: 1em;
+  height: 1em;
+  accent-color: var(--primary);
+}
+
+/* Strikethrough for GFM */
+.prose del {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Search, FileText, Trash2, Send, Bold, Italic, List, Code, Hash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -170,7 +171,7 @@ export default function NotesPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="w-full">
       {/* Quick Create Input */}
       <div className="mb-8">
         <div className="border rounded-lg overflow-hidden bg-card">
@@ -286,7 +287,7 @@ export default function NotesPage() {
           <p>No notes yet. Start typing above!</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
           {notes.map((note) => (
             <Card key={note.id} className="h-full hover:border-primary/50 hover:shadow-md transition-all group relative">
               <Link href={`/notes/${note.id}`}>
@@ -305,7 +306,7 @@ export default function NotesPage() {
                     </div>
                   )}
                   <div className="prose prose-sm text-muted-foreground text-sm line-clamp-6 flex-1 mb-3">
-                    <ReactMarkdown>{note.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground/60">
                     <span>{countWords(note.content)} words</span>
