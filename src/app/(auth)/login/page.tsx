@@ -31,6 +31,7 @@ export default function LoginPage() {
         });
 
         if (result.error) {
+          console.error('Sign up error:', result.error);
           setError(result.error.message || 'Sign up failed');
           return;
         }
@@ -41,6 +42,7 @@ export default function LoginPage() {
         });
 
         if (result.error) {
+          console.error('Sign in error:', result.error);
           setError(result.error.message || 'Sign in failed');
           return;
         }
@@ -49,6 +51,7 @@ export default function LoginPage() {
       router.push('/notes');
       router.refresh();
     } catch (err) {
+      console.error('Auth catch error:', err);
       setError(err instanceof Error ? err.message : 'Authentication failed');
     } finally {
       setLoading(false);
