@@ -2,10 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Search, FileText } from 'lucide-react';
+import { Search, FileText, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { format } from 'date-fns';
 
 interface Note {
@@ -29,6 +37,7 @@ export default function NotesPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<Note | null>(null);
 
   useEffect(() => {
     fetchNotes();
@@ -60,18 +69,19 @@ export default function NotesPage() {
     fetchNotes();
   };
 
-  return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Notes</h1>
-        <Link href="/notes/new">
-          <Button>
-            <Plus size={20} className="mr-2" />
-            New Note
-          </Button>
-        </Link>
-      </div>
+  const deleteNote = async (id: string) => {
+    try {
+      await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+      setDeleteTarget(null);
+      fetchNotes();
+    } catch (error) {
+      console.error('Failed to delete note:', error);
+    }
+  };
 
+  return (
+    <div className="max-w-6xl mx-auto">
+      {/* Search */}
       <form onSubmit={handleSearch} className="mb-6">
         <div className="relative">
           <Search
@@ -88,39 +98,50 @@ export default function NotesPage() {
         </div>
       </form>
 
+      {/* Notes Grid */}
       {loading ? (
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
         </div>
       ) : notes.length === 0 ? (
-        <Card>
-          <CardContent className="text-center py-12">
-            <FileText size={48} className="mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">No notes yet. Create your first note!</p>
-          </CardContent>
-        </Card>
+        <div className="text-center py-12 text-muted-foreground">
+          <FileText size={48} className="mx-auto mb-4 opacity-50" />
+          <p>No notes yet. Create one from the sidebar!</p>
+        </div>
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {notes.map((note) => (
-            <Link key={note.id} href={`/notes/${note.id}`}>
-              <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-                <CardContent className="py-4">
-                  <h3 className="font-semibold text-foreground mb-1">
+            <Card key={note.id} className="h-full hover:border-primary/50 hover:shadow-md transition-all group relative">
+              <Link href={`/notes/${note.id}`}>
+                <CardContent className="p-5 h-full flex flex-col cursor-pointer">
+                  <h3 className="font-semibold text-foreground mb-2 line-clamp-1 group-hover:text-primary transition-colors pr-8">
                     {note.title}
                   </h3>
-                  <p className="text-muted-foreground text-sm line-clamp-2 mb-2">
-                    {note.content.slice(0, 150)}...
+                  <p className="text-muted-foreground text-sm line-clamp-4 flex-1 mb-3">
+                    {note.content}
                   </p>
-                  <p className="text-xs text-muted-foreground/70">
-                    Updated {format(new Date(note.updatedAt), 'MMM d, yyyy')}
+                  <p className="text-xs text-muted-foreground/60">
+                    {format(new Date(note.updatedAt), 'MMM d, yyyy')}
                   </p>
                 </CardContent>
-              </Card>
-            </Link>
+              </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDeleteTarget(note);
+                }}
+                className="absolute top-3 right-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Trash2 size={16} />
+              </Button>
+            </Card>
           ))}
         </div>
       )}
 
+      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-8">
           <Button
@@ -142,6 +163,33 @@ export default function NotesPage() {
           </Button>
         </div>
       )}
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Note</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this note? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget && (
+            <p className="text-sm font-medium border-l-2 pl-3">
+              {deleteTarget.title}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteTarget && deleteNote(deleteTarget.id)}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

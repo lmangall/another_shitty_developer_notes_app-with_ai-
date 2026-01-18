@@ -2,9 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Bell, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Bell, Clock, CheckCircle, XCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { format } from 'date-fns';
 
 interface Reminder {
@@ -43,6 +51,7 @@ export default function RemindersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('');
+  const [deleteTarget, setDeleteTarget] = useState<Reminder | null>(null);
 
   useEffect(() => {
     fetchReminders();
@@ -78,6 +87,18 @@ export default function RemindersPage() {
       fetchReminders();
     } catch (error) {
       console.error('Failed to update reminder:', error);
+    }
+  };
+
+  const deleteReminder = async (id: string) => {
+    try {
+      await fetch(`/api/reminders/${id}`, {
+        method: 'DELETE',
+      });
+      setDeleteTarget(null);
+      fetchReminders();
+    } catch (error) {
+      console.error('Failed to delete reminder:', error);
     }
   };
 
@@ -143,24 +164,34 @@ export default function RemindersPage() {
                     </p>
                   </div>
 
-                  {reminder.status === 'pending' && (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => updateStatus(reminder.id, 'completed')}
-                      >
-                        Complete
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => updateStatus(reminder.id, 'cancelled')}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  )}
+                  <div className="flex gap-2">
+                    {reminder.status === 'pending' && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateStatus(reminder.id, 'completed')}
+                        >
+                          Complete
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateStatus(reminder.id, 'cancelled')}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDeleteTarget(reminder)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -189,6 +220,33 @@ export default function RemindersPage() {
           </Button>
         </div>
       )}
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Reminder</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this reminder? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget && (
+            <p className="text-sm text-muted-foreground border-l-2 pl-3">
+              {deleteTarget.message}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteTarget && deleteReminder(deleteTarget.id)}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
