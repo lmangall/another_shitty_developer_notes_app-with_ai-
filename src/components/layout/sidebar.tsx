@@ -2,91 +2,48 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { FileText, Bell, Mail, Mic, LogOut, Send } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { useTheme } from 'next-themes';
+import { LayoutDashboard, FileText, Bell, Mail, Mic, LogOut, Sun, Moon, Menu, X } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
 const navItems = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/notes', label: 'Notes', icon: FileText },
   { href: '/reminders', label: 'Reminders', icon: Bell },
   { href: '/logs', label: 'Email Logs', icon: Mail },
   { href: '/input', label: 'Quick Input', icon: Mic },
 ];
 
-export function Sidebar() {
+function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [newNote, setNewNote] = useState('');
-  const [creating, setCreating] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   const handleSignOut = async () => {
     await signOut();
     window.location.href = '/login';
   };
 
-  const handleCreateNote = async () => {
-    if (!newNote.trim() || creating) return;
-
-    setCreating(true);
-    try {
-      const lines = newNote.trim().split('\n');
-      const title = lines[0].slice(0, 100) || 'Untitled';
-      const content = newNote.trim();
-
-      const res = await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content }),
-      });
-
-      if (res.ok) {
-        setNewNote('');
-        router.push('/notes');
-        router.refresh();
-      }
-    } catch (error) {
-      console.error('Failed to create note:', error);
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handleCreateNote();
-    }
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
   };
 
   return (
-    <aside className="w-64 bg-sidebar text-sidebar-foreground min-h-screen flex flex-col border-r border-sidebar-border">
-      <div className="p-6">
+    <>
+      <div className="p-6 flex items-center justify-between">
         <h1 className="text-xl font-bold">Notes App</h1>
-      </div>
-
-      {/* Quick Note Input */}
-      <div className="px-4 mb-4">
-        <div className="relative">
-          <Textarea
-            placeholder="New note... (Cmd+Enter)"
-            value={newNote}
-            onChange={(e) => setNewNote(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="min-h-[80px] pr-10 text-sm resize-none bg-sidebar-accent/50 border-sidebar-border"
-          />
-          <Button
-            size="icon"
-            variant="ghost"
-            className="absolute bottom-2 right-2 h-7 w-7"
-            onClick={handleCreateNote}
-            disabled={!newNote.trim() || creating}
-          >
-            <Send size={14} />
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleTheme}
+          className="text-sidebar-foreground hover:bg-sidebar-accent"
+        >
+          <Sun size={18} className="rotate-0 scale-100 transition-transform dark:-rotate-90 dark:scale-0" />
+          <Moon size={18} className="absolute rotate-90 scale-0 transition-transform dark:rotate-0 dark:scale-100" />
+          <span className="sr-only">Toggle theme</span>
+        </Button>
       </div>
 
       <nav className="flex-1 px-4">
@@ -98,6 +55,7 @@ export function Sidebar() {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  onClick={onNavClick}
                   className={cn(
                     'flex items-center gap-3 px-4 py-2 rounded-md transition-colors text-sm',
                     isActive
@@ -124,6 +82,65 @@ export function Sidebar() {
           Sign Out
         </Button>
       </div>
+    </>
+  );
+}
+
+export function MobileHeader() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <>
+      {/* Mobile Header */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-sidebar border-b border-sidebar-border px-4 py-3 flex items-center justify-between">
+        <h1 className="text-lg font-bold text-sidebar-foreground">Notes App</h1>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsOpen(true)}
+          className="text-sidebar-foreground"
+        >
+          <Menu size={24} />
+          <span className="sr-only">Open menu</span>
+        </Button>
+      </header>
+
+      {/* Mobile Drawer Overlay */}
+      {isOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-50 bg-black/50"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      {/* Mobile Drawer */}
+      <aside
+        className={cn(
+          'md:hidden fixed top-0 left-0 z-50 h-full w-64 bg-sidebar text-sidebar-foreground flex flex-col border-r border-sidebar-border transform transition-transform duration-300 ease-in-out',
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
+        <div className="absolute top-4 right-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsOpen(false)}
+            className="text-sidebar-foreground"
+          >
+            <X size={20} />
+            <span className="sr-only">Close menu</span>
+          </Button>
+        </div>
+        <SidebarContent onNavClick={() => setIsOpen(false)} />
+      </aside>
+    </>
+  );
+}
+
+export function Sidebar() {
+  return (
+    <aside className="hidden md:flex w-64 bg-sidebar text-sidebar-foreground min-h-screen flex-col border-r border-sidebar-border">
+      <SidebarContent />
     </aside>
   );
 }
