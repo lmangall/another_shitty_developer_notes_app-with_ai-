@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Notes App (Developer Playground)
 
-## Getting Started
+A personal sandbox for experimenting with APIs, tools, and integrations. Built around one simple idea: **speak into your phone → get structured notes**.
 
-First, run the development server:
+## Why This Exists
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Two things I really wanted:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. **Voice → structured output.** Ramble into my phone or desktop, get clean bullet points. Markdown is perfect for this—one note is just one string in the database and that's it.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+2. **Email → database.** I built this for a client first (their version is more advanced), but having my own is magic: send an email, AI processes it, database updated.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The rest grew and will grew from there as a place to try new things—connecting services, testing APIs, experimenting with tools.
+I am also happy I can ramble to claude code when the repo is open, and it'll just create the content in DB.
+Side note: I use Superwhisper
 
-## Learn More
+## Entry Points
 
-To learn more about Next.js, take a look at the following resources:
+Multiple ways to create notes, all processed by AI:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Claude Code** — prompt from the terminal while in the repo
+- **Email** — send to the server (webhook signature verification so only real emails get processed, plus sender whitelist)
+- **Voice** — quick create button with speech recognition
+- **Form** — the old-fashioned way, if you're not too lazy
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Features
 
-## Deploy on Vercel
+**Reminders**
+- Natural language: "remind me to call mom tomorrow at 5pm"
+- Notifications via email, push, or both
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+**Push Notifications**
+- Web Push API with VAPID
+- Works on mobile browsers
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**The Basics**
+- Notes with tags and markdown
+- Dashboard with stats
+
+## Cron & Free Tier Constraints
+
+Reminders need periodic checks. Options considered:
+- **Vercel Cron** — limited to 1/day on free tier
+- **GitHub Actions** — could ping every 5 minutes, but running a GitHub Action just to hit a Vercel URL feels overkill
+
+Solution: **UptimeRobot** pings `/api/cron/check-reminders` for free. It's meant for uptime monitoring, but works perfectly for triggering the cron job.
+
+## Tech Stack
+
+- Next.js 16 + React 19
+- Drizzle ORM + Neon PostgreSQL
+- Better Auth (email + Google OAuth)
+- Vercel AI SDK + Sonnet (could swap for cheaper models easily)
+- Resend (email + webhooks)
+- Web Push API
