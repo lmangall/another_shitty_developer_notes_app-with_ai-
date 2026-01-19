@@ -3,6 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { db } from '@/db';
 import { users, sessions, accounts, verifications } from '@/db/schema';
 import { Resend } from 'resend';
+import { isSigninAllowed } from '@/lib/constants';
 
 function getResend() {
   if (!process.env.RESEND_API_KEY) {
@@ -25,6 +26,9 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
+  },
+  denySignIn: async ({ user }: { user: { email: string } }) => {
+    return !isSigninAllowed(user.email);
   },
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {

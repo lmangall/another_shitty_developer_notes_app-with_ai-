@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -16,6 +16,7 @@ export default function NewNotePage() {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +45,70 @@ export default function NewNotePage() {
       setError(err instanceof Error ? err.message : 'Failed to create note');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      const { selectionStart } = textarea;
+      const text = content;
+
+      const lineStart = text.lastIndexOf('\n', selectionStart - 1) + 1;
+      const lineEnd = text.indexOf('\n', selectionStart);
+      const currentLine = text.substring(lineStart, lineEnd === -1 ? text.length : lineEnd);
+
+      const bulletMatch = currentLine.match(/^(\s*)([-*])\s/);
+      const checkboxMatch = currentLine.match(/^(\s*)([-*])\s\[([ xX])\]\s/);
+      const numberedMatch = currentLine.match(/^(\s*)(\d+)\.\s/);
+
+      let listPrefix = '';
+      let isEmptyListItem = false;
+
+      if (checkboxMatch) {
+        const [fullMatch, indent, marker] = checkboxMatch;
+        const lineContent = currentLine.substring(fullMatch.length);
+        isEmptyListItem = lineContent.trim() === '';
+        listPrefix = `${indent}${marker} [ ] `;
+      } else if (bulletMatch) {
+        const [fullMatch, indent, marker] = bulletMatch;
+        const lineContent = currentLine.substring(fullMatch.length);
+        isEmptyListItem = lineContent.trim() === '';
+        listPrefix = `${indent}${marker} `;
+      } else if (numberedMatch) {
+        const [fullMatch, indent, num] = numberedMatch;
+        const lineContent = currentLine.substring(fullMatch.length);
+        isEmptyListItem = lineContent.trim() === '';
+        listPrefix = `${indent}${parseInt(num) + 1}. `;
+      }
+
+      if (listPrefix) {
+        e.preventDefault();
+
+        if (isEmptyListItem) {
+          const beforeLine = text.substring(0, lineStart);
+          const afterLine = text.substring(lineEnd === -1 ? text.length : lineEnd);
+          const newText = beforeLine.trimEnd() + afterLine;
+          setContent(newText);
+          setTimeout(() => {
+            textarea.focus();
+            const newPos = beforeLine.trimEnd().length;
+            textarea.setSelectionRange(newPos, newPos);
+          }, 0);
+        } else {
+          const before = text.substring(0, selectionStart);
+          const after = text.substring(selectionStart);
+          const newText = before + '\n' + listPrefix + after;
+          setContent(newText);
+          setTimeout(() => {
+            textarea.focus();
+            const newPos = selectionStart + 1 + listPrefix.length;
+            textarea.setSelectionRange(newPos, newPos);
+          }, 0);
+        }
+      }
     }
   };
 
@@ -83,10 +148,12 @@ export default function NewNotePage() {
             <div className="space-y-2">
               <Label htmlFor="content">Content</Label>
               <Textarea
+                ref={textareaRef}
                 id="content"
                 placeholder="Write your note here... (Markdown supported)"
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
+                onKeyDown={handleKeyDown}
                 rows={10}
                 required
               />

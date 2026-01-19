@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Edit2, Trash2, Save, X } from 'lucide-react';
 import Link from 'next/link';
@@ -30,6 +30,7 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     fetchNote();
@@ -82,6 +83,73 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
     } catch (error) {
       console.error('Failed to delete note:', error);
       setDeleting(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter key - handle list continuation
+    if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
+
+      const { selectionStart } = textarea;
+      const text = content;
+
+      // Find the start of the current line
+      const lineStart = text.lastIndexOf('\n', selectionStart - 1) + 1;
+      const lineEnd = text.indexOf('\n', selectionStart);
+      const currentLine = text.substring(lineStart, lineEnd === -1 ? text.length : lineEnd);
+
+      // Check for list patterns
+      const bulletMatch = currentLine.match(/^(\s*)([-*])\s/);
+      const checkboxMatch = currentLine.match(/^(\s*)([-*])\s\[([ xX])\]\s/);
+      const numberedMatch = currentLine.match(/^(\s*)(\d+)\.\s/);
+
+      let listPrefix = '';
+      let isEmptyListItem = false;
+
+      if (checkboxMatch) {
+        const [fullMatch, indent, marker] = checkboxMatch;
+        const lineContent = currentLine.substring(fullMatch.length);
+        isEmptyListItem = lineContent.trim() === '';
+        listPrefix = `${indent}${marker} [ ] `;
+      } else if (bulletMatch) {
+        const [fullMatch, indent, marker] = bulletMatch;
+        const lineContent = currentLine.substring(fullMatch.length);
+        isEmptyListItem = lineContent.trim() === '';
+        listPrefix = `${indent}${marker} `;
+      } else if (numberedMatch) {
+        const [fullMatch, indent, num] = numberedMatch;
+        const lineContent = currentLine.substring(fullMatch.length);
+        isEmptyListItem = lineContent.trim() === '';
+        listPrefix = `${indent}${parseInt(num) + 1}. `;
+      }
+
+      if (listPrefix) {
+        e.preventDefault();
+
+        if (isEmptyListItem) {
+          const beforeLine = text.substring(0, lineStart);
+          const afterLine = text.substring(lineEnd === -1 ? text.length : lineEnd);
+          const newText = beforeLine.trimEnd() + afterLine;
+          setContent(newText);
+          setTimeout(() => {
+            textarea.focus();
+            const newPos = beforeLine.trimEnd().length;
+            textarea.setSelectionRange(newPos, newPos);
+          }, 0);
+        } else {
+          const before = text.substring(0, selectionStart);
+          const after = text.substring(selectionStart);
+          const newText = before + '\n' + listPrefix + after;
+          setContent(newText);
+          setTimeout(() => {
+            textarea.focus();
+            const newPos = selectionStart + 1 + listPrefix.length;
+            textarea.setSelectionRange(newPos, newPos);
+          }, 0);
+        }
+      }
     }
   };
 
@@ -161,8 +229,10 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
         <CardContent>
           {editing ? (
             <Textarea
+              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              onKeyDown={handleKeyDown}
               rows={15}
               placeholder="Write your note... (Markdown supported)"
             />

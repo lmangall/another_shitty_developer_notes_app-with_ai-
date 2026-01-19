@@ -16,6 +16,8 @@ export type NotifyVia = (typeof NOTIFY_VIA_OPTIONS)[number]['value'];
 export const WHITELISTED_EMAILS = [
   'l.mangallon@gmail.com',
   'leonard@42lab.co',
+  'stefanolombardo@posteo.de',
+  'contact@martynastec.com',
 ] as const;
 
 export type WhitelistedEmail = (typeof WHITELISTED_EMAILS)[number];
@@ -28,6 +30,29 @@ export function isEmailWhitelisted(email: string): boolean {
   const normalizedEmail = email.toLowerCase().trim();
   return WHITELISTED_EMAILS.some(
     (whitelisted) => whitelisted.toLowerCase() === normalizedEmail
+  );
+}
+
+/**
+ * Email addresses allowed to sign in to the app.
+ * Only users with these emails can register or log in.
+ */
+export const ALLOWED_SIGNIN_EMAILS = [
+  'l.mangallon@gmail.com',
+  'stefanolombardo@posteo.de',
+  'contact@martynastec.com',
+] as const;
+
+export type AllowedSigninEmail = (typeof ALLOWED_SIGNIN_EMAILS)[number];
+
+/**
+ * Check if an email address is allowed to sign in.
+ * Comparison is case-insensitive.
+ */
+export function isSigninAllowed(email: string): boolean {
+  const normalizedEmail = email.toLowerCase().trim();
+  return ALLOWED_SIGNIN_EMAILS.some(
+    (allowed) => allowed.toLowerCase() === normalizedEmail
   );
 }
 
@@ -115,3 +140,10 @@ export const RECURRENCE_OPTIONS = [
 ] as const;
 
 export type Recurrence = (typeof RECURRENCE_OPTIONS)[number]['value'];
+
+/**
+ * Resend inbound email address for creating notes/reminders via email.
+ * Users send emails to this address to have them processed by the AI agent.
+ * Format: notes@echaekul.resend.app
+ */
+export const RESEND_INBOUND_EMAIL = 'notes@echaekul.resend.app' as const;
