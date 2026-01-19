@@ -59,7 +59,12 @@ async function logEmailProcessing(
   error?: string
 ): Promise<void> {
   const firstToolResult = response?.toolResults?.[0];
-  const success = firstToolResult?.success ?? false;
+  // Success if: AI responded (response exists) AND either no tools were called OR the tool succeeded
+  // Only mark as failed if: no response, explicit error, or a tool was called and failed
+  const success = response !== null && (
+    !firstToolResult || // No tool called = conversational response = success
+    firstToolResult.success // Tool called and succeeded
+  );
 
   // Extract data from successful results
   let noteId: string | null = null;

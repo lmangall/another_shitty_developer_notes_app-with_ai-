@@ -64,8 +64,8 @@ export default function RemindersPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<ReminderStatus | ''>('');
   const [notifyViaFilter, setNotifyViaFilter] = useState<NotifyVia | ''>('');
-  const [sortBy, setSortBy] = useState<ReminderSortOption>('remindAt');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [sortBy, setSortBy] = useState<ReminderSortOption>('createdAt');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
