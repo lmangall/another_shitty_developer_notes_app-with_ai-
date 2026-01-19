@@ -5,6 +5,7 @@ import { processWithAgent, getUserContext, type AgentResponse, type ToolExecutio
 import type { NewEmailLog } from '@/db/schema';
 import crypto from 'crypto';
 import { isEmailWhitelisted } from '@/lib/constants';
+import { createLogger } from '@/lib/logger';
 
 // Verify Resend webhook signature
 function verifySignature(payload: string, signature: string, secret: string): boolean {
@@ -52,6 +53,10 @@ async function logEmailProcessing(
 }
 
 export async function POST(request: NextRequest) {
+  const log = createLogger({ requestId: crypto.randomUUID() });
+
+  log.info('Email webhook received');
+
   const body = await request.text();
   const signature = request.headers.get('svix-signature');
   const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
@@ -60,11 +65,11 @@ export async function POST(request: NextRequest) {
   if (webhookSecret && signature) {
     try {
       if (!verifySignature(body, signature, webhookSecret)) {
+        log.warn('Invalid webhook signature');
         return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
       }
     } catch {
-      // Continue without verification in development
-      console.warn('Webhook signature verification failed');
+      log.warn('Webhook signature verification failed, continuing without verification');
     }
   }
 
@@ -73,24 +78,27 @@ export async function POST(request: NextRequest) {
 
   // Handle email.received event
   if (type !== 'email.received') {
+    log.info('Ignoring non-email.received event', { eventType: type });
     return NextResponse.json({ message: 'Event type not handled' });
   }
 
   const { from, to, subject, text, html } = data;
+  const fromEmail = Array.isArray(from) ? from[0] : from;
+  const toAddress = Array.isArray(to) ? to[0] : to;
+
+  log.info('Processing inbound email', { from: fromEmail, to: toAddress, subject });
 
   // Check if sender email is whitelisted
-  const fromEmail = Array.isArray(from) ? from[0] : from;
   if (!isEmailWhitelisted(fromEmail)) {
-    console.warn('Email from non-whitelisted address rejected:', fromEmail);
+    log.warn('Email from non-whitelisted address rejected', { fromEmail });
     return NextResponse.json({ error: 'Sender not authorized' }, { status: 403 });
   }
 
   // Extract user ID from email address (format: {user-id}@domain.com)
-  const toAddress = Array.isArray(to) ? to[0] : to;
   const match = toAddress.match(/^([^@]+)@/);
 
   if (!match) {
-    console.error('Invalid email format:', toAddress);
+    log.error('Invalid email format', undefined, { toAddress });
     return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
   }
 
@@ -113,9 +121,11 @@ export async function POST(request: NextRequest) {
   }
 
   if (!user) {
-    console.error('User not found for email:', from);
+    log.error('User not found for email', undefined, { fromEmail });
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
+
+  log.info('User identified', { userId: user.id, userEmail: user.email });
 
   // Use plain text or strip HTML
   const emailBody = text || html?.replace(/<[^>]*>/g, '') || '';
@@ -131,11 +141,18 @@ export async function POST(request: NextRequest) {
 
   try {
     // Get user context and process with the AI agent
+    log.info('Processing with AI agent', { userId: user.id });
     const context = await getUserContext(user.id);
     const response = await processWithAgent(user.id, input, context);
 
     // Log the email processing
     await logEmailProcessing(emailLog, response);
+
+    log.info('Email processed successfully', {
+      userId: user.id,
+      message: response.message,
+      toolResults: response.toolResults?.map(r => ({ action: r.action, success: r.success })),
+    });
 
     return NextResponse.json({
       success: true,
@@ -143,7 +160,7 @@ export async function POST(request: NextRequest) {
       toolResults: response.toolResults,
     });
   } catch (error) {
-    console.error('Email processing error:', error);
+    log.error('Email processing failed', error, { userId: user.id });
 
     // Log failed processing
     await logEmailProcessing(
