@@ -4,7 +4,7 @@ import { eq, desc, asc, and, sql, gte } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { logger } from '@/lib/logger';
-import { NOTIFY_VIA_OPTIONS, type NotifyVia, type ReminderSortOption } from '@/lib/constants';
+import { NOTIFY_VIA_OPTIONS, RECURRENCE_OPTIONS, type NotifyVia, type ReminderSortOption, type Recurrence } from '@/lib/constants';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
   const userId = session.user.id;
   const body = await request.json();
-  const { message, remindAt, notifyVia } = body;
+  const { message, remindAt, notifyVia, recurrence, recurrenceEndDate } = body;
 
   if (!message) {
     return NextResponse.json(
@@ -102,6 +102,11 @@ export async function POST(request: NextRequest) {
   const finalNotifyVia: NotifyVia =
     notifyVia && validNotifyVia.includes(notifyVia) ? notifyVia : 'email';
 
+  // Validate recurrence if provided
+  const validRecurrence = RECURRENCE_OPTIONS.map((o) => o.value);
+  const finalRecurrence: Recurrence | null =
+    recurrence && validRecurrence.includes(recurrence) ? recurrence : null;
+
   const [reminder] = await db
     .insert(reminders)
     .values({
@@ -109,11 +114,18 @@ export async function POST(request: NextRequest) {
       message,
       remindAt: remindAt ? new Date(remindAt) : null,
       notifyVia: finalNotifyVia,
+      recurrence: finalRecurrence || null,
+      recurrenceEndDate: recurrenceEndDate ? new Date(recurrenceEndDate) : null,
       status: 'pending',
     })
     .returning();
 
-  logger.info('Reminder created', { userId, reminderId: reminder.id, notifyVia: finalNotifyVia });
+  logger.info('Reminder created', {
+    userId,
+    reminderId: reminder.id,
+    notifyVia: finalNotifyVia,
+    recurrence: finalRecurrence,
+  });
 
   return NextResponse.json(reminder, { status: 201 });
 }

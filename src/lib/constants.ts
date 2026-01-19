@@ -103,3 +103,15 @@ export const REMINDER_STATUS_OPTIONS = [
 ] as const;
 
 export type ReminderStatus = (typeof REMINDER_STATUS_OPTIONS)[number]['value'];
+
+/**
+ * Recurrence options for reminders.
+ */
+export const RECURRENCE_OPTIONS = [
+  { value: '', label: 'One-time' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+] as const;
+
+export type Recurrence = (typeof RECURRENCE_OPTIONS)[number]['value'];

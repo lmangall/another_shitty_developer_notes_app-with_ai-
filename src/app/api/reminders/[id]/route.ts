@@ -4,7 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { logger } from '@/lib/logger';
-import { NOTIFY_VIA_OPTIONS, type NotifyVia } from '@/lib/constants';
+import { NOTIFY_VIA_OPTIONS, RECURRENCE_OPTIONS, type NotifyVia, type Recurrence } from '@/lib/constants';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -47,7 +47,7 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { message, remindAt, status, notifyVia } = body;
+  const { message, remindAt, status, notifyVia, recurrence, recurrenceEndDate } = body;
 
   const [reminder] = await db
     .select()
@@ -63,6 +63,13 @@ export async function PATCH(
   const finalNotifyVia: NotifyVia | undefined =
     notifyVia && validNotifyVia.includes(notifyVia) ? notifyVia : undefined;
 
+  // Validate recurrence if provided
+  const validRecurrence = RECURRENCE_OPTIONS.map((o) => o.value);
+  const finalRecurrence: Recurrence | null | undefined =
+    recurrence !== undefined
+      ? (recurrence && validRecurrence.includes(recurrence) ? recurrence : null)
+      : undefined;
+
   const [updated] = await db
     .update(reminders)
     .set({
@@ -70,6 +77,8 @@ export async function PATCH(
       ...(remindAt !== undefined && { remindAt: remindAt ? new Date(remindAt) : null }),
       ...(status && { status }),
       ...(finalNotifyVia && { notifyVia: finalNotifyVia }),
+      ...(finalRecurrence !== undefined && { recurrence: finalRecurrence || null }),
+      ...(recurrenceEndDate !== undefined && { recurrenceEndDate: recurrenceEndDate ? new Date(recurrenceEndDate) : null }),
       updatedAt: new Date(),
     })
     .where(eq(reminders.id, id))

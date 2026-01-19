@@ -28,6 +28,7 @@ import {
   type SortOrder,
   type ReminderStatus,
   type ViewOption,
+  type Recurrence,
 } from '@/lib/constants';
 
 const VIEW_STORAGE_KEY = 'reminders-view-preference';
@@ -38,6 +39,8 @@ interface Reminder {
   remindAt: string | null;
   notifyVia: NotifyVia;
   status: string;
+  recurrence: Recurrence | null;
+  recurrenceEndDate: string | null;
   createdAt: string;
   updatedAt: string;
 }

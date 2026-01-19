@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, boolean, jsonb, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, boolean, jsonb, integer, index } from 'drizzle-orm/pg-core';
 
 // Users table (Better Auth compatible)
 export const users = pgTable('users', {
@@ -58,10 +58,13 @@ export const notes = pgTable('notes', {
   cardColSpan: integer('card_col_span').notNull().default(1),
   cardRowSpan: integer('card_row_span').notNull().default(1),
   position: integer('position').notNull().default(0),
+  isPinned: boolean('is_pinned').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   deletedAt: timestamp('deleted_at'),
-});
+}, (table) => [
+  index('idx_notes_user_deleted').on(table.userId, table.deletedAt),
+]);
 
 // Tags table
 export const tags = pgTable('tags', {
@@ -86,9 +89,14 @@ export const reminders = pgTable('reminders', {
   remindAt: timestamp('remind_at'),
   notifyVia: text('notify_via').notNull().default('email'), // email, push, both
   status: text('status').notNull().default('pending'), // pending, sent, cancelled, completed
+  recurrence: text('recurrence'), // daily, weekly, monthly, null (one-time)
+  recurrenceEndDate: timestamp('recurrence_end_date'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_reminders_status_remind').on(table.status, table.remindAt),
+  index('idx_reminders_user_status').on(table.userId, table.status),
+]);
 
 // Push subscriptions for web push notifications
 export const pushSubscriptions = pgTable('push_subscriptions', {
@@ -115,7 +123,9 @@ export const emailLogs = pgTable('email_logs', {
   status: text('status').notNull().default('pending'), // pending, processed, failed
   errorMessage: text('error_message'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_email_logs_user_status').on(table.userId, table.status),
+]);
 
 // Types
 export type User = typeof users.$inferSelect;

@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
-import { NOTIFY_VIA_OPTIONS, type NotifyVia } from '@/lib/constants';
+import { NOTIFY_VIA_OPTIONS, RECURRENCE_OPTIONS, type NotifyVia, type Recurrence } from '@/lib/constants';
 
 export default function NewReminderPage() {
   const router = useRouter();
@@ -19,6 +19,8 @@ export default function NewReminderPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState('09:00');
   const [notifyVia, setNotifyVia] = useState<NotifyVia>('email');
+  const [recurrence, setRecurrence] = useState<Recurrence>('');
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCalendarMobile, setShowCalendarMobile] = useState(false);
@@ -50,6 +52,8 @@ export default function NewReminderPage() {
           message,
           remindAt: getRemindAtValue(),
           notifyVia,
+          recurrence: recurrence || null,
+          recurrenceEndDate: recurrenceEndDate?.toISOString() || null,
         }),
       });
 
@@ -157,6 +161,49 @@ export default function NewReminderPage() {
                   </p>
                 </div>
 
+                <div className="space-y-2 mt-4">
+                  <Label>Repeat</Label>
+                  <div className="flex gap-2 flex-wrap">
+                    {RECURRENCE_OPTIONS.map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        variant={recurrence === option.value ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => {
+                          setRecurrence(option.value);
+                          if (!option.value) setRecurrenceEndDate(undefined);
+                        }}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                  {recurrence && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-sm text-muted-foreground">End date (optional):</span>
+                      <Input
+                        type="date"
+                        value={recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : ''}
+                        onChange={(e) => setRecurrenceEndDate(e.target.value ? new Date(e.target.value) : undefined)}
+                        className="w-40"
+                        min={format(new Date(), 'yyyy-MM-dd')}
+                      />
+                      {recurrenceEndDate && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setRecurrenceEndDate(undefined)}
+                          className="text-muted-foreground text-xs"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {selectedDate && (
                   <p className="text-sm text-muted-foreground mt-2">
                     Scheduled: {format(selectedDate, 'EEE, MMM d')} at {selectedTime}
@@ -258,6 +305,38 @@ export default function NewReminderPage() {
                     </Button>
                   ))}
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Repeat</Label>
+                <div className="flex gap-2 flex-wrap">
+                  {RECURRENCE_OPTIONS.map((option) => (
+                    <Button
+                      key={option.value}
+                      type="button"
+                      variant={recurrence === option.value ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => {
+                        setRecurrence(option.value);
+                        if (!option.value) setRecurrenceEndDate(undefined);
+                      }}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+                {recurrence && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-sm text-muted-foreground">End:</span>
+                    <Input
+                      type="date"
+                      value={recurrenceEndDate ? format(recurrenceEndDate, 'yyyy-MM-dd') : ''}
+                      onChange={(e) => setRecurrenceEndDate(e.target.value ? new Date(e.target.value) : undefined)}
+                      className="flex-1"
+                      min={format(new Date(), 'yyyy-MM-dd')}
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3">

@@ -36,6 +36,7 @@ import { NotesTable } from '@/components/notes/notes-table';
 import { NotesFilterBar } from '@/components/notes/notes-filter-bar';
 import { ViewToggle } from '@/components/notes/view-toggle';
 import type { ViewOption, NoteSortOption, SortOrder } from '@/lib/constants';
+import { useToastActions } from '@/components/ui/toast';
 
 interface Tag {
   id: string;
@@ -52,6 +53,7 @@ interface Note {
   tags: Tag[];
   cardColSpan: number;
   cardRowSpan: number;
+  isPinned: boolean;
 }
 
 interface NotesResponse {
@@ -86,6 +88,9 @@ export default function NotesPage() {
   // Drag state
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeNote = activeId ? notes.find(n => n.id === activeId) : null;
+
+  // Toast notifications
+  const toast = useToastActions();
 
   // dnd-kit sensors
   const sensors = useSensors(
@@ -166,9 +171,13 @@ export default function NotesPage() {
       if (res.ok) {
         setNewNote('');
         fetchNotes();
+        toast.success('Note created');
+      } else {
+        toast.error('Failed to create note');
       }
     } catch (error) {
       console.error('Failed to create note:', error);
+      toast.error('Failed to create note');
     } finally {
       setCreating(false);
     }
@@ -222,11 +231,17 @@ export default function NotesPage() {
 
   const deleteNote = async (id: string) => {
     try {
-      await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/notes/${id}`, { method: 'DELETE' });
       setDeleteTarget(null);
-      fetchNotes();
+      if (res.ok) {
+        fetchNotes();
+        toast.success('Note moved to trash');
+      } else {
+        toast.error('Failed to delete note');
+      }
     } catch (error) {
       console.error('Failed to delete note:', error);
+      toast.error('Failed to delete note');
     }
   };
 
@@ -263,6 +278,34 @@ export default function NotesPage() {
     } catch (error) {
       console.error('Failed to resize note:', error);
       fetchNotes();
+    }
+  };
+
+  const handlePinToggle = async (noteId: string, isPinned: boolean) => {
+    // Optimistic update
+    setNotes(prev => prev.map(note =>
+      note.id === noteId ? { ...note, isPinned } : note
+    ));
+
+    try {
+      const res = await fetch(`/api/notes/${noteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPinned }),
+      });
+
+      if (!res.ok) {
+        fetchNotes();
+        toast.error('Failed to update pin status');
+      } else {
+        // Re-fetch to get correct sort order with pinned notes first
+        fetchNotes();
+        toast.success(isPinned ? 'Note pinned' : 'Note unpinned');
+      }
+    } catch (error) {
+      console.error('Failed to pin note:', error);
+      fetchNotes();
+      toast.error('Failed to update pin status');
     }
   };
 
@@ -462,6 +505,7 @@ export default function NotesPage() {
                   onDelete={setDeleteTarget}
                   onTagsChange={fetchNotes}
                   onResize={handleResize}
+                  onPinToggle={handlePinToggle}
                 />
               ))}
             </div>
@@ -479,6 +523,7 @@ export default function NotesPage() {
                   onDelete={() => {}}
                   onTagsChange={() => {}}
                   onResize={() => {}}
+                  onPinToggle={() => {}}
                 />
               </div>
             ) : null}
@@ -492,6 +537,7 @@ export default function NotesPage() {
           onSortChange={handleSortChange}
           onDelete={setDeleteTarget}
           onTagsChange={fetchNotes}
+          onPinToggle={handlePinToggle}
         />
       )}
 

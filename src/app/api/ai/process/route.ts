@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { processWithAgent, getUserContext } from '@/lib/ai';
 import { createLogger } from '@/lib/logger';
+import { checkRateLimit, rateLimitHeaders, RATE_LIMITS } from '@/lib/rate-limit';
 
 async function getSession() {
   const session = await auth.api.getSession({
@@ -20,6 +21,25 @@ export async function POST(request: NextRequest) {
   }
 
   const userId = session.user.id;
+
+  // Rate limiting
+  const rateLimit = checkRateLimit(
+    `ai:${userId}`,
+    RATE_LIMITS.AI_PROCESS.limit,
+    RATE_LIMITS.AI_PROCESS.windowMs
+  );
+
+  if (!rateLimit.success) {
+    log.warn('Rate limit exceeded', { userId });
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      {
+        status: 429,
+        headers: rateLimitHeaders(rateLimit, RATE_LIMITS.AI_PROCESS.limit),
+      }
+    );
+  }
+
   log.info('AI process request received', { userId });
 
   const body = await request.json();

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Pin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { TagBadge } from '@/components/tag-badge';
@@ -30,6 +30,7 @@ interface Note {
   tags: Tag[];
   cardColSpan: number;
   cardRowSpan: number;
+  isPinned: boolean;
 }
 
 interface NoteCardProps {
@@ -37,10 +38,11 @@ interface NoteCardProps {
   onDelete: (note: Note) => void;
   onTagsChange: () => void;
   onResize: (noteId: string, colSpan: number, rowSpan: number) => void;
+  onPinToggle: (noteId: string, isPinned: boolean) => void;
   disableGridStyles?: boolean;
 }
 
-export function NoteCard({ note, onDelete, onTagsChange, onResize, disableGridStyles }: NoteCardProps) {
+export function NoteCard({ note, onDelete, onTagsChange, onResize, onPinToggle, disableGridStyles }: NoteCardProps) {
   const colSpan = note.cardColSpan || 1;
   const rowSpan = note.cardRowSpan || 1;
 
@@ -51,7 +53,7 @@ export function NoteCard({ note, onDelete, onTagsChange, onResize, disableGridSt
 
   return (
     <Card
-      className="h-full hover:border-primary/50 hover:shadow-md transition-all group relative"
+      className={`h-full hover:border-primary/50 hover:shadow-md transition-all group relative ${note.isPinned ? 'border-primary/30 bg-primary/5' : ''}`}
       style={disableGridStyles ? undefined : {
         gridColumn: `span ${colSpan}`,
         gridRow: `span ${rowSpan}`,
@@ -60,6 +62,7 @@ export function NoteCard({ note, onDelete, onTagsChange, onResize, disableGridSt
       <Link href={`/notes/${note.id}`}>
         <CardContent className="p-5 h-full flex flex-col cursor-pointer">
           <h3 className={`font-semibold text-foreground mb-2 group-hover:text-primary transition-colors pr-16 ${rowSpan > 1 ? 'line-clamp-2' : 'line-clamp-1'}`}>
+            {note.isPinned && <Pin size={14} className="inline mr-1.5 text-primary" />}
             {note.title}
           </h3>
           {note.tags && note.tags.length > 0 && (
@@ -93,6 +96,18 @@ export function NoteCard({ note, onDelete, onTagsChange, onResize, disableGridSt
 
       {/* Action buttons */}
       <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.preventDefault();
+            onPinToggle(note.id, !note.isPinned);
+          }}
+          className={`h-7 w-7 p-0 ${note.isPinned ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
+          title={note.isPinned ? 'Unpin note' : 'Pin note'}
+        >
+          <Pin size={16} />
+        </Button>
         <TagPicker
           noteId={note.id}
           currentTags={note.tags || []}

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { LayoutDashboard, FileText, Bell, Mail, Mic, LogOut, Sun, Moon, Menu, X } from 'lucide-react';
+import { LayoutDashboard, FileText, Bell, Mail, Mic, LogOut, Sun, Moon, Menu, X, Trash2 } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/notes', label: 'Notes', icon: FileText },
+  { href: '/notes/trash', label: 'Trash', icon: Trash2 },
   { href: '/reminders', label: 'Reminders', icon: Bell },
   { href: '/logs', label: 'Email Logs', icon: Mail },
   { href: '/input', label: 'Quick Input', icon: Mic },
@@ -49,7 +50,10 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
       <nav className="flex-1 px-4">
         <ul className="space-y-1">
           {navItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
+            // Exact match for specific paths, or starts with for others (but not sub-paths)
+            const isActive = item.href === '/notes'
+              ? pathname === '/notes' || (pathname.startsWith('/notes/') && !pathname.startsWith('/notes/trash'))
+              : pathname.startsWith(item.href);
             const Icon = item.icon;
             return (
               <li key={item.href}>

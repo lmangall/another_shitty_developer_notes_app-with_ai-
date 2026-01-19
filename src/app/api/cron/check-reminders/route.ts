@@ -4,6 +4,7 @@ import { eq, and, lte } from 'drizzle-orm';
 import { sendReminderEmail } from '@/lib/email';
 import { sendPushNotification } from '@/lib/push';
 import { logger } from '@/lib/logger';
+import { calculateNextOccurrence } from '@/lib/reminder-utils';
 
 export async function GET(request: NextRequest) {
   // Verify cron secret
@@ -104,6 +105,28 @@ export async function GET(request: NextRequest) {
             .update(reminders)
             .set({ status: 'sent', updatedAt: new Date() })
             .where(eq(reminders.id, reminder.id));
+
+          // Create next occurrence for recurring reminders
+          if (reminder.recurrence && reminder.remindAt) {
+            const nextDate = calculateNextOccurrence(reminder.remindAt, reminder.recurrence);
+            // Only create if within recurrence end date (or no end date set)
+            if (!reminder.recurrenceEndDate || nextDate <= reminder.recurrenceEndDate) {
+              await db.insert(reminders).values({
+                userId: reminder.userId,
+                message: reminder.message,
+                remindAt: nextDate,
+                notifyVia: reminder.notifyVia,
+                recurrence: reminder.recurrence,
+                recurrenceEndDate: reminder.recurrenceEndDate,
+                status: 'pending',
+              });
+              logger.info('Created next recurring reminder', {
+                originalReminderId: reminder.id,
+                nextDate: nextDate.toISOString(),
+                recurrence: reminder.recurrence,
+              });
+            }
+          }
 
           results.push({
             id: reminder.id,

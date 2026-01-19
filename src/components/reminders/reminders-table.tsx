@@ -1,6 +1,6 @@
 'use client';
 
-import { Trash2, ArrowUp, ArrowDown, ArrowUpDown, Clock, CheckCircle, XCircle, Mail, Smartphone, Pencil, MoreVertical, Check, Ban } from 'lucide-react';
+import { Trash2, ArrowUp, ArrowDown, ArrowUpDown, Clock, CheckCircle, XCircle, Mail, Smartphone, Pencil, MoreVertical, Check, Ban, Repeat } from 'lucide-react';
 import { format, isPast, differenceInHours, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { ReminderSortOption, SortOrder, NotifyVia } from '@/lib/constants';
+import type { ReminderSortOption, SortOrder, NotifyVia, Recurrence } from '@/lib/constants';
 
 interface Reminder {
   id: string;
@@ -19,9 +19,17 @@ interface Reminder {
   remindAt: string | null;
   notifyVia: NotifyVia;
   status: string;
+  recurrence: Recurrence | null;
+  recurrenceEndDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+const recurrenceLabels: Record<string, string> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+};
 
 interface RemindersTableProps {
   reminders: Reminder[];
@@ -212,6 +220,12 @@ export function RemindersTable({
                       {urgency && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap ${urgency.className}`}>
                           {urgency.label}
+                        </span>
+                      )}
+                      {reminder.recurrence && (
+                        <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                          <Repeat size={10} />
+                          {recurrenceLabels[reminder.recurrence]}
                         </span>
                       )}
                     </div>

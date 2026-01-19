@@ -46,7 +46,7 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { title, content, cardColSpan, cardRowSpan } = body;
+  const { title, content, cardColSpan, cardRowSpan, isPinned } = body;
 
   // Validate spans if provided (1-2 columns, 1-2 rows for preset sizes)
   if (cardColSpan !== undefined && (cardColSpan < 1 || cardColSpan > 2)) {
@@ -72,6 +72,7 @@ export async function PATCH(
       ...(content && { content }),
       ...(cardColSpan !== undefined && { cardColSpan }),
       ...(cardRowSpan !== undefined && { cardRowSpan }),
+      ...(isPinned !== undefined && { isPinned }),
       updatedAt: new Date(),
     })
     .where(eq(notes.id, id))

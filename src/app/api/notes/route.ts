@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     whereClause = and(whereClause, inArray(notes.id, noteIdsWithTags))!;
   }
 
-  // Build order by clause
+  // Build order by clause - pinned notes always first, then by user's sort preference
   const sortColumn = sortBy === 'title' ? notes.title :
                      sortBy === 'createdAt' ? notes.createdAt :
                      sortBy === 'position' ? notes.position :
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
       .select()
       .from(notes)
       .where(whereClause)
-      .orderBy(orderByClause)
+      .orderBy(desc(notes.isPinned), orderByClause)
       .limit(limit)
       .offset(offset),
     db

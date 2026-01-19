@@ -19,6 +19,7 @@ interface Note {
   tags: Tag[];
   cardColSpan: number;
   cardRowSpan: number;
+  isPinned: boolean;
 }
 
 interface SortableNoteCardProps {
@@ -26,6 +27,7 @@ interface SortableNoteCardProps {
   onDelete: (note: Note) => void;
   onTagsChange: () => void;
   onResize: (noteId: string, colSpan: number, rowSpan: number) => void;
+  onPinToggle: (noteId: string, isPinned: boolean) => void;
   isDragging?: boolean;
 }
 
@@ -34,6 +36,7 @@ export function SortableNoteCard({
   onDelete,
   onTagsChange,
   onResize,
+  onPinToggle,
 }: SortableNoteCardProps) {
   const {
     attributes,
@@ -59,6 +62,7 @@ export function SortableNoteCard({
         onDelete={onDelete}
         onTagsChange={onTagsChange}
         onResize={onResize}
+        onPinToggle={onPinToggle}
         disableGridStyles
       />
     </div>

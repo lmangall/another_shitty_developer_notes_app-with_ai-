@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Trash2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Trash2, ArrowUp, ArrowDown, ArrowUpDown, Pin } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { TagBadge } from '@/components/tag-badge';
@@ -23,6 +23,7 @@ interface Note {
   tags: Tag[];
   cardColSpan: number;
   cardRowSpan: number;
+  isPinned: boolean;
 }
 
 interface NotesTableProps {
@@ -32,6 +33,7 @@ interface NotesTableProps {
   onSortChange: (column: NoteSortOption) => void;
   onDelete: (note: Note) => void;
   onTagsChange: () => void;
+  onPinToggle: (noteId: string, isPinned: boolean) => void;
 }
 
 function countWords(text: string): number {
@@ -50,6 +52,7 @@ export function NotesTable({
   onSortChange,
   onDelete,
   onTagsChange,
+  onPinToggle,
 }: NotesTableProps) {
   function SortHeader({
     column,
@@ -128,8 +131,9 @@ export function NotesTable({
                 <td className="px-4 py-3">
                   <Link
                     href={`/notes/${note.id}`}
-                    className="font-medium text-foreground hover:text-primary transition-colors line-clamp-1"
+                    className="font-medium text-foreground hover:text-primary transition-colors line-clamp-1 flex items-center gap-1.5"
                   >
+                    {note.isPinned && <Pin size={12} className="text-primary flex-shrink-0" />}
                     {note.title}
                   </Link>
                 </td>
@@ -184,6 +188,18 @@ export function NotesTable({
                 {/* Actions */}
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onPinToggle(note.id, !note.isPinned);
+                      }}
+                      className={`h-7 w-7 p-0 ${note.isPinned ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
+                      title={note.isPinned ? 'Unpin note' : 'Pin note'}
+                    >
+                      <Pin size={14} />
+                    </Button>
                     <TagPicker
                       noteId={note.id}
                       currentTags={note.tags || []}

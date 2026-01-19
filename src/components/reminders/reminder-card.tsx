@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, CheckCircle, XCircle, Mail, Smartphone, Trash2, Pencil, MoreVertical, Check, Ban } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Mail, Smartphone, Trash2, Pencil, MoreVertical, Check, Ban, Repeat } from 'lucide-react';
 import { format, isPast, differenceInHours, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { NotifyVia } from '@/lib/constants';
+import type { NotifyVia, Recurrence } from '@/lib/constants';
 
 interface Reminder {
   id: string;
@@ -20,6 +20,8 @@ interface Reminder {
   remindAt: string | null;
   notifyVia: NotifyVia;
   status: string;
+  recurrence: Recurrence | null;
+  recurrenceEndDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,6 +64,12 @@ const notifyViaLabels: Record<NotifyVia, string> = {
   email: 'Email',
   push: 'Push',
   both: 'Both',
+};
+
+const recurrenceLabels: Record<string, string> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
 };
 
 function getUrgencyBadge(remindAt: string | null, status: string): { label: string; className: string } | null {
@@ -122,6 +130,12 @@ export function ReminderCard({
               {urgency && (
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${urgency.className}`}>
                   {urgency.label}
+                </span>
+              )}
+              {reminder.recurrence && (
+                <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                  <Repeat size={12} />
+                  {recurrenceLabels[reminder.recurrence]}
                 </span>
               )}
             </div>
