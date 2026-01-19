@@ -322,6 +322,7 @@ function createTools(userId: string, userTags: { id: string; name: string }[]) {
               message,
               remindAt: remindAtDate,
               status: 'pending',
+              notifyVia: 'both', // Default to both push and email for agent-created reminders
             })
             .returning();
 
