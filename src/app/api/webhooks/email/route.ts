@@ -7,6 +7,39 @@ import crypto from 'crypto';
 import { isEmailWhitelisted } from '@/lib/constants';
 import { createLogger } from '@/lib/logger';
 
+const RESEND_API_BASE_URL = 'https://api.resend.com';
+
+/**
+ * Fetch full email content from Resend API.
+ * Webhooks do NOT include the email body - only metadata.
+ * See: https://resend.com/docs/dashboard/receiving/get-email-content
+ */
+async function fetchFullEmail(emailId: string): Promise<{ text: string | null; html: string | null }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY not configured');
+  }
+
+  const url = `${RESEND_API_BASE_URL}/emails/receiving/${emailId}`;
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch email from Resend API: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  return {
+    text: data.text || null,
+    html: data.html || null,
+  };
+}
+
 // Verify Resend webhook signature
 function verifySignature(payload: string, signature: string, secret: string): boolean {
   const expectedSignature = crypto
@@ -82,11 +115,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Event type not handled' });
   }
 
-  const { from, to, subject, text, html } = data;
+  const { from, to, subject, email_id } = data;
   const fromEmail = Array.isArray(from) ? from[0] : from;
   const toAddress = Array.isArray(to) ? to[0] : to;
 
-  log.info('Processing inbound email', { from: fromEmail, to: toAddress, subject });
+  log.info('Processing inbound email', { from: fromEmail, to: toAddress, subject, emailId: email_id });
 
   // Check if sender email is whitelisted
   if (!isEmailWhitelisted(fromEmail)) {
@@ -126,6 +159,26 @@ export async function POST(request: NextRequest) {
   }
 
   log.info('User identified', { userId: user.id, userEmail: user.email });
+
+  // Fetch full email content from Resend API (webhooks don't include body)
+  let text: string | null = null;
+  let html: string | null = null;
+
+  try {
+    log.info('Fetching full email content from Resend API', { emailId: email_id });
+    const fullEmail = await fetchFullEmail(email_id);
+    text = fullEmail.text;
+    html = fullEmail.html;
+    log.info('Fetched email content', {
+      emailId: email_id,
+      hasText: !!text,
+      hasHtml: !!html,
+      textLength: text?.length || 0
+    });
+  } catch (fetchError) {
+    log.error('Failed to fetch full email content', fetchError, { emailId: email_id });
+    // Continue with empty body - AI will ask for clarification
+  }
 
   // Use plain text or strip HTML
   const emailBody = text || html?.replace(/<[^>]*>/g, '') || '';
