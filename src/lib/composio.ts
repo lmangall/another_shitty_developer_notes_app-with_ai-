@@ -5,9 +5,8 @@ import { logger } from './logger';
 // Initialize Composio client with Vercel AI SDK provider
 const composio = new Composio({
   apiKey: process.env.COMPOSIO_API_KEY,
+  provider: new VercelProvider(),
 });
-
-const vercelProvider = new VercelProvider();
 
 // Google Calendar action names
 export const GOOGLE_CALENDAR_ACTIONS = {
@@ -214,4 +213,4 @@ export async function hasGoogleCalendarConnection(userId: string): Promise<boole
   return connection !== null;
 }
 
-export { composio, vercelProvider };
+export { composio };
