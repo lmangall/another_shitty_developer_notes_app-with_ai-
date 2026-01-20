@@ -632,7 +632,7 @@ export function QuickCreateFAB() {
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     ) : (
                       <>
-                        <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-headings:my-2 **:font-[inherit]">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                         </div>
                         {/* Tool invocations */}
@@ -659,7 +659,7 @@ export function QuickCreateFAB() {
                     )}
                     {/* Show streaming text */}
                     {streamingContent && (
-                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                      <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-p:my-1 prose-headings:my-2 **:font-[inherit]">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
                       </div>
                     )}
