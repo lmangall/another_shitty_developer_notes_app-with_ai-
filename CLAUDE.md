@@ -218,6 +218,86 @@ await resend.emails.send({
 
 ---
 
+## Composio Integration
+
+**Documentation:** https://docs.composio.dev/llms.txt
+
+Composio enables AI agents to interact with external tools (Google Calendar, Gmail, Slack, etc.) through authenticated actions.
+
+### Critical Guidelines
+- **Always fetch latest docs first:** Use WebFetch on https://docs.composio.dev/llms.txt before making changes
+- **Check provider-specific docs:** For Vercel AI SDK, see https://docs.composio.dev/providers/vercel
+- **Authentication flows:** See https://docs.composio.dev/docs/authenticating-tools
+- **Tool customization:** Refer to docs for schema/input/output modifiers
+
+### Environment Variables
+```bash
+COMPOSIO_API_KEY="your_api_key"
+COMPOSIO_PROJECT_ID="your_project_id"
+```
+
+### Installation
+```bash
+npm install @composio/vercel @composio/core
+```
+
+### Basic Setup with Vercel AI SDK
+```typescript
+import { Composio } from '@composio/core';
+import { VercelProvider } from '@composio/vercel';
+import { generateText } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+
+const composio = new Composio({
+  apiKey: process.env.COMPOSIO_API_KEY,
+});
+
+// Get tools for a connected user
+const tools = await composio.tools.get({
+  actions: ['GOOGLECALENDAR_CREATE_EVENT', 'GOOGLECALENDAR_LIST_EVENTS'],
+  connectedAccountId: userConnectionId,
+});
+
+// Use with AI model
+const { text } = await generateText({
+  model: anthropic('claude-sonnet-4-20250514'),
+  tools,
+  prompt: 'Create a meeting tomorrow at 2pm',
+});
+```
+
+### User Authentication Flow
+```typescript
+// 1. Create a connection link for the user
+const connectionRequest = await composio.connectedAccounts.initiate({
+  integrationId: 'google-calendar', // or auth config ID
+  redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/composio/callback`,
+  entityId: userId, // Your app's user ID
+});
+
+// 2. Redirect user to: connectionRequest.redirectUrl
+
+// 3. Handle callback - connection is now active
+const connectedAccount = await composio.connectedAccounts.get(connectionId);
+// Status should be 'ACTIVE'
+```
+
+### Connection Statuses
+- **ACTIVE**: Ready for tool execution
+- **PENDING**: Processing in progress
+- **INITIATED**: Authentication incomplete (user needs to complete OAuth)
+- **EXPIRED**: Credentials expired (Composio attempts auto-refresh)
+- **FAILED**: Connection attempt unsuccessful
+
+### Available Google Calendar Actions
+- `GOOGLECALENDAR_CREATE_EVENT` - Create calendar events
+- `GOOGLECALENDAR_LIST_EVENTS` - List events in a date range
+- `GOOGLECALENDAR_UPDATE_EVENT` - Modify existing events
+- `GOOGLECALENDAR_DELETE_EVENT` - Remove events
+- `GOOGLECALENDAR_GET_EVENT` - Get event details
+
+---
+
 ## Constants Pattern
 
 Use `as const` arrays for dropdown values (not enums):
