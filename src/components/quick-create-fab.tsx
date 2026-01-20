@@ -145,16 +145,72 @@ export function QuickCreateFAB() {
     setActiveToolCalls(new Map());
   }, []);
 
-  // Parse SSE stream line
-  // Format: "data: {json}" where json has a "type" field
-  const parseStreamLine = (line: string): { type: string; [key: string]: unknown } | null => {
-    if (!line.startsWith('data: ')) return null;
-    const jsonStr = line.substring(6); // Remove "data: " prefix
-    if (jsonStr === '[DONE]') return null;
+  // Parse SSE stream line using Vercel AI SDK Data Stream Protocol
+  // Format: "TYPE_CODE:VALUE" where TYPE_CODE is a single character/hex digit
+  // See: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol#data-stream-protocol
+  type StreamEvent =
+    | { type: 'text-delta'; delta: string }
+    | { type: 'tool-call'; toolCallId: string; toolName: string; args: Record<string, unknown> }
+    | { type: 'tool-result'; toolCallId: string; result: unknown }
+    | { type: 'finish'; finishReason: string }
+    | { type: 'error'; error: string }
+    | null;
+
+  const parseStreamLine = (line: string): StreamEvent => {
+    // Handle SSE format: "data: TYPE_CODE:VALUE"
+    let content = line;
+    if (line.startsWith('data: ')) {
+      content = line.substring(6);
+    }
+    if (!content || content === '[DONE]') return null;
+
+    // Data Stream Protocol: first char(s) is type code, then ':', then value
+    const colonIndex = content.indexOf(':');
+    if (colonIndex === -1) return null;
+
+    const typeCode = content.substring(0, colonIndex);
+    const valueStr = content.substring(colonIndex + 1);
 
     try {
-      const data = JSON.parse(jsonStr);
-      return data;
+      switch (typeCode) {
+        case '0': {
+          // Text delta - value is a JSON-encoded string
+          const text = JSON.parse(valueStr);
+          return { type: 'text-delta', delta: String(text) };
+        }
+        case '9': {
+          // Tool call starting
+          const data = JSON.parse(valueStr);
+          return {
+            type: 'tool-call',
+            toolCallId: data.toolCallId,
+            toolName: data.toolName,
+            args: data.args || {},
+          };
+        }
+        case 'a': {
+          // Tool result (hex 10)
+          const data = JSON.parse(valueStr);
+          return {
+            type: 'tool-result',
+            toolCallId: data.toolCallId,
+            result: data.result,
+          };
+        }
+        case 'e': {
+          // Finish
+          const data = JSON.parse(valueStr);
+          return { type: 'finish', finishReason: data.finishReason || 'stop' };
+        }
+        case '3': {
+          // Error
+          const error = JSON.parse(valueStr);
+          return { type: 'error', error: String(error) };
+        }
+        default:
+          // Unknown type, ignore
+          return null;
+      }
     } catch {
       return null;
     }
@@ -229,35 +285,32 @@ export function QuickCreateFAB() {
 
           switch (event.type) {
             case 'text-delta':
-              // Format: {"type":"text-delta","id":"0","delta":"text"}
-              if (typeof event.delta === 'string') {
-                fullContent += event.delta;
-                setStreamingContent(fullContent);
-              }
+              fullContent += event.delta;
+              setStreamingContent(fullContent);
               break;
 
-            case 'tool-input-start':
+            case 'tool-call':
               // Tool starting - show spinner
               if (event.toolCallId && event.toolName) {
                 const invocation: ToolInvocation = {
-                  toolCallId: event.toolCallId as string,
-                  toolName: event.toolName as string,
+                  toolCallId: event.toolCallId,
+                  toolName: event.toolName,
                   state: 'running',
                 };
-                toolCalls.set(event.toolCallId as string, invocation);
+                toolCalls.set(event.toolCallId, invocation);
                 setActiveToolCalls(new Map(toolCalls));
               }
               break;
 
-            case 'tool-output-available':
+            case 'tool-result':
               // Tool completed - show result
               if (event.toolCallId) {
-                const existing = toolCalls.get(event.toolCallId as string);
+                const existing = toolCalls.get(event.toolCallId);
                 if (existing) {
-                  const output = event.output as ToolResult | undefined;
+                  const output = event.result as ToolResult | undefined;
                   existing.state = output?.success !== false ? 'completed' : 'error';
                   existing.result = output;
-                  toolCalls.set(event.toolCallId as string, existing);
+                  toolCalls.set(event.toolCallId, existing);
                   setActiveToolCalls(new Map(toolCalls));
                 }
               }
