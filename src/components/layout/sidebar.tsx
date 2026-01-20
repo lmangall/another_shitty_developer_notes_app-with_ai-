@@ -87,11 +87,19 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         </Button>
       </div>
 
-      {process.env.NEXT_PUBLIC_BUILD_TIME && (
-        <div className="px-4 pb-4 text-xs text-sidebar-foreground/50">
-          Deployed: {new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString()}
-        </div>
-      )}
+      {process.env.NEXT_PUBLIC_BUILD_TIME && (() => {
+        try {
+          const date = new Date(process.env.NEXT_PUBLIC_BUILD_TIME);
+          if (isNaN(date.getTime())) return null;
+          return (
+            <div className="px-4 pb-4 text-xs text-sidebar-foreground/50">
+              Deployed: {date.toLocaleString()}
+            </div>
+          );
+        } catch {
+          return null;
+        }
+      })()}
     </>
   );
 }
