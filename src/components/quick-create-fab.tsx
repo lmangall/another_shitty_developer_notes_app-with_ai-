@@ -145,9 +145,7 @@ export function QuickCreateFAB() {
     setActiveToolCalls(new Map());
   }, []);
 
-  // Parse SSE stream line using Vercel AI SDK Data Stream Protocol
-  // Format: "TYPE_CODE:VALUE" where TYPE_CODE is a single character/hex digit
-  // See: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol#data-stream-protocol
+  // Parse SSE stream line - supports both AI SDK Data Stream Protocol formats
   type StreamEvent =
     | { type: 'text-delta'; delta: string }
     | { type: 'tool-call'; toolCallId: string; toolName: string; args: Record<string, unknown> }
@@ -157,63 +155,91 @@ export function QuickCreateFAB() {
     | null;
 
   const parseStreamLine = (line: string): StreamEvent => {
-    // Handle SSE format: "data: TYPE_CODE:VALUE"
+    // Handle SSE format: remove "data: " prefix if present
     let content = line;
     if (line.startsWith('data: ')) {
       content = line.substring(6);
     }
     if (!content || content === '[DONE]') return null;
 
-    // Data Stream Protocol: first char(s) is type code, then ':', then value
-    const colonIndex = content.indexOf(':');
-    if (colonIndex === -1) return null;
+    // Try Data Stream Protocol format first: "TYPE_CODE:VALUE"
+    // Type codes: 0=text, 9=tool-call, a=tool-result, e=finish, 3=error
+    const match = content.match(/^([0-9a-f]):([\s\S]*)$/);
+    if (match) {
+      const [, typeCode, valueStr] = match;
+      try {
+        switch (typeCode) {
+          case '0': {
+            // Text delta - value is a JSON-encoded string
+            const text = JSON.parse(valueStr);
+            return { type: 'text-delta', delta: String(text) };
+          }
+          case '9': {
+            // Tool call starting
+            const data = JSON.parse(valueStr);
+            return {
+              type: 'tool-call',
+              toolCallId: data.toolCallId,
+              toolName: data.toolName,
+              args: data.args || {},
+            };
+          }
+          case 'a': {
+            // Tool result (hex 10)
+            const data = JSON.parse(valueStr);
+            return {
+              type: 'tool-result',
+              toolCallId: data.toolCallId,
+              result: data.result,
+            };
+          }
+          case 'e': {
+            // Finish
+            const data = JSON.parse(valueStr);
+            return { type: 'finish', finishReason: data.finishReason || 'stop' };
+          }
+          case '3': {
+            // Error
+            const error = JSON.parse(valueStr);
+            return { type: 'error', error: String(error) };
+          }
+        }
+      } catch {
+        // Fall through to try JSON format
+      }
+    }
 
-    const typeCode = content.substring(0, colonIndex);
-    const valueStr = content.substring(colonIndex + 1);
-
+    // Try JSON format: {"type":"...", ...}
     try {
-      switch (typeCode) {
-        case '0': {
-          // Text delta - value is a JSON-encoded string
-          const text = JSON.parse(valueStr);
-          return { type: 'text-delta', delta: String(text) };
+      const data = JSON.parse(content);
+      if (data && typeof data.type === 'string') {
+        switch (data.type) {
+          case 'text-delta':
+            return { type: 'text-delta', delta: String(data.textDelta || data.delta || '') };
+          case 'tool-call':
+            return {
+              type: 'tool-call',
+              toolCallId: data.toolCallId,
+              toolName: data.toolName,
+              args: data.args || {},
+            };
+          case 'tool-result':
+            return {
+              type: 'tool-result',
+              toolCallId: data.toolCallId,
+              result: data.result,
+            };
+          case 'finish':
+            return { type: 'finish', finishReason: data.finishReason || 'stop' };
+          case 'error':
+            return { type: 'error', error: String(data.error || data.message || '') };
         }
-        case '9': {
-          // Tool call starting
-          const data = JSON.parse(valueStr);
-          return {
-            type: 'tool-call',
-            toolCallId: data.toolCallId,
-            toolName: data.toolName,
-            args: data.args || {},
-          };
-        }
-        case 'a': {
-          // Tool result (hex 10)
-          const data = JSON.parse(valueStr);
-          return {
-            type: 'tool-result',
-            toolCallId: data.toolCallId,
-            result: data.result,
-          };
-        }
-        case 'e': {
-          // Finish
-          const data = JSON.parse(valueStr);
-          return { type: 'finish', finishReason: data.finishReason || 'stop' };
-        }
-        case '3': {
-          // Error
-          const error = JSON.parse(valueStr);
-          return { type: 'error', error: String(error) };
-        }
-        default:
-          // Unknown type, ignore
-          return null;
       }
     } catch {
-      return null;
+      // Not valid JSON
     }
+
+    return null;
   };
 
   // Send message with streaming
@@ -280,7 +306,11 @@ export function QuickCreateFAB() {
         for (const line of lines) {
           if (!line.trim()) continue;
 
+          // Debug: log raw line to see actual format
+          console.log('[Stream line]:', JSON.stringify(line));
+
           const event = parseStreamLine(line);
+          console.log('[Parsed event]:', event);
           if (!event) continue;
 
           switch (event.type) {
