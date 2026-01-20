@@ -2,9 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit2, Trash2, Save, X } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { Trash2, Save, X, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -14,7 +12,7 @@ import {
   SheetTitle,
   SheetFooter,
 } from '@/components/ui/sheet';
-import { MarkdownEditor } from '@/components/notes/markdown-editor';
+import { TiptapEditor } from '@/components/notes/tiptap-editor';
 import { format } from 'date-fns';
 
 interface Note {
@@ -36,7 +34,6 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [open, setOpen] = useState(true);
-  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview');
 
   useEffect(() => {
     fetchNote();
@@ -97,6 +94,14 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
     router.back();
   };
 
+  const handleCancel = () => {
+    setEditing(false);
+    if (note) {
+      setTitle(note.title);
+      setContent(note.content);
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
@@ -128,24 +133,14 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
             </SheetHeader>
 
             <div className="mt-6 flex-1">
-              {editing ? (
-                <MarkdownEditor
-                  value={content}
-                  onChange={setContent}
-                  viewMode={viewMode}
-                  onViewModeChange={setViewMode}
-                  onSave={handleSave}
-                  minRows={12}
-                />
-              ) : (
-                <div
-                  className="prose prose-sm max-w-none dark:prose-invert cursor-text min-h-[100px]"
-                  onClick={() => setEditing(true)}
-                  title="Click to edit"
-                >
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
-                </div>
-              )}
+              <TiptapEditor
+                value={content}
+                onChange={setContent}
+                onSave={handleSave}
+                editable={editing}
+                showToolbar={editing}
+                minRows={12}
+              />
             </div>
 
             <SheetFooter className="mt-6 flex-col gap-4 sm:flex-col">
@@ -161,15 +156,7 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
               <div className="flex gap-2 justify-end w-full">
                 {editing ? (
                   <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setEditing(false);
-                        setTitle(note.title);
-                        setContent(note.content);
-                      }}
-                    >
+                    <Button variant="ghost" size="sm" onClick={handleCancel}>
                       <X size={18} className="mr-1" />
                       Cancel
                     </Button>
@@ -180,11 +167,7 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
                   </>
                 ) : (
                   <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditing(true)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
                       <Edit2 size={18} className="mr-1" />
                       Edit
                     </Button>

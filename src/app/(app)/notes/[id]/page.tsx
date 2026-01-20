@@ -2,14 +2,12 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Edit2, Trash2, Save, X } from 'lucide-react';
+import { ArrowLeft, Trash2, Save, X, Edit2 } from 'lucide-react';
 import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
-import { MarkdownEditor } from '@/components/notes/markdown-editor';
+import { TiptapEditor } from '@/components/notes/tiptap-editor';
 import { format } from 'date-fns';
 
 interface Note {
@@ -30,7 +28,6 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview');
 
   useEffect(() => {
     fetchNote();
@@ -86,6 +83,14 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
     }
   };
 
+  const handleCancel = () => {
+    setEditing(false);
+    if (note) {
+      setTitle(note.title);
+      setContent(note.content);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -121,15 +126,7 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
           <div className="flex gap-2">
             {editing ? (
               <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setEditing(false);
-                    setTitle(note.title);
-                    setContent(note.content);
-                  }}
-                >
+                <Button variant="ghost" size="sm" onClick={handleCancel}>
                   <X size={18} />
                 </Button>
                 <Button size="sm" onClick={handleSave} disabled={saving}>
@@ -139,11 +136,7 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
               </>
             ) : (
               <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEditing(true)}
-                >
+                <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
                   <Edit2 size={18} />
                 </Button>
                 <Button
@@ -160,24 +153,14 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
         </CardHeader>
 
         <CardContent>
-          {editing ? (
-            <MarkdownEditor
-              value={content}
-              onChange={setContent}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              onSave={handleSave}
-              autoFocus
-            />
-          ) : (
-            <div
-              className="prose prose-sm max-w-none dark:prose-invert cursor-text min-h-[100px]"
-              onClick={() => setEditing(true)}
-              title="Click to edit"
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
-            </div>
-          )}
+          <TiptapEditor
+            value={content}
+            onChange={setContent}
+            onSave={handleSave}
+            editable={editing}
+            showToolbar={editing}
+            autoFocus={editing}
+          />
         </CardContent>
 
         <CardFooter className="text-sm text-muted-foreground">
