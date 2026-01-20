@@ -170,7 +170,11 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
               autoFocus
             />
           ) : (
-            <div className="prose prose-sm max-w-none dark:prose-invert">
+            <div
+              className="prose prose-sm max-w-none dark:prose-invert cursor-text min-h-[100px]"
+              onClick={() => setEditing(true)}
+              title="Click to edit"
+            >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
             </div>
           )}
