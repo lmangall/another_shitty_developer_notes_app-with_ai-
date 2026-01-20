@@ -59,12 +59,46 @@ interface Conversation {
   updatedAt: string;
 }
 
-// Helper to format tool names for display
+// Helper to format tool/action names for display
+// Handles: GOOGLECALENDAR_LIST_EVENTS, createNote, create_note
 function formatToolName(name: string): string {
+  // Known service prefixes to split nicely
+  const serviceMap: Record<string, string> = {
+    GOOGLECALENDAR: 'Google Calendar',
+    GMAIL: 'Gmail',
+    SLACK: 'Slack',
+    NOTION: 'Notion',
+    GITHUB: 'GitHub',
+  };
+
+  // Check for known service prefixes (SERVICENAME_ACTION format)
+  for (const [prefix, displayName] of Object.entries(serviceMap)) {
+    if (name.startsWith(prefix + '_')) {
+      const action = name
+        .slice(prefix.length + 1)
+        .toLowerCase()
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+      return `${displayName}: ${action}`;
+    }
+    // Handle cases without underscore like GOOGLECALENDARLISTEVENTS
+    if (name.startsWith(prefix) && name.length > prefix.length) {
+      const rest = name.slice(prefix.length);
+      // If rest is all caps, try to split on common action words
+      if (rest === rest.toUpperCase()) {
+        const action = rest
+          .toLowerCase()
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        return `${displayName}: ${action}`;
+      }
+    }
+  }
+
+  // Fallback: handle snake_case, camelCase, PascalCase
   return name
     .replace(/_/g, ' ')
-    .replace(/([A-Z])/g, ' $1')
-    .replace(/^./, (s) => s.toUpperCase())
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 }
 
@@ -530,7 +564,7 @@ export function QuickCreateFAB() {
         ) : (
           <XCircle className="h-3 w-3" />
         )}
-        <span className="font-medium">{tool.result?.action || displayName}</span>
+        <span className="font-medium">{tool.result?.action ? formatToolName(tool.result.action) : displayName}</span>
         {tool.result?.message && <span className="truncate">{tool.result.message}</span>}
         {tool.result?.error && <span className="truncate">{tool.result.error}</span>}
       </div>
