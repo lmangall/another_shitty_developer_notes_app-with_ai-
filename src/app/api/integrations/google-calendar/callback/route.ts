@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { headers } from 'next/headers';
 import { db } from '@/db';
 import { userIntegrations } from '@/db/schema';
-import { getConnectionStatus, waitForConnection } from '@/lib/composio';
+import { getConnectionDetails, waitForConnection } from '@/lib/composio';
 import { createLogger } from '@/lib/logger';
 import { eq, and } from 'drizzle-orm';
 
@@ -11,55 +9,70 @@ export async function GET(request: Request) {
   const log = createLogger({ requestId: crypto.randomUUID() });
 
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
     const url = new URL(request.url);
     const connectionId = url.searchParams.get('connected_account_id');
-
-    if (!session?.user) {
-      log.warn('Unauthorized callback attempt');
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
+    const status = url.searchParams.get('status');
 
     if (!connectionId) {
-      log.warn('Callback missing connection ID', { userId: session.user.id });
+      log.warn('Callback missing connection ID');
       return NextResponse.redirect(
         new URL('/integrations?error=missing_connection_id', request.url)
       );
     }
 
-    log.info('Processing Google Calendar callback', {
-      userId: session.user.id,
-      connectionId,
-    });
+    // Check for OAuth failure
+    if (status === 'failed' || status === 'error') {
+      log.warn('OAuth failed', { connectionId, status });
+      return NextResponse.redirect(
+        new URL('/integrations?error=oauth_failed', request.url)
+      );
+    }
 
-    // Check current status first
-    const currentStatus = await getConnectionStatus(connectionId);
+    log.info('Processing Google Calendar callback', { connectionId });
+
+    // Get connection details from Composio (includes userId/entityId)
+    let connectionDetails = await getConnectionDetails(connectionId);
 
     // If not already active, wait for connection to complete
-    if (currentStatus.status !== 'ACTIVE') {
+    if (connectionDetails.status !== 'ACTIVE') {
       log.info('Connection not yet active, waiting...', {
-        userId: session.user.id,
         connectionId,
-        currentStatus: currentStatus.status,
+        currentStatus: connectionDetails.status,
       });
 
       try {
         await waitForConnection(connectionId, 30000);
+        // Refresh connection details after waiting
+        connectionDetails = await getConnectionDetails(connectionId);
       } catch {
         // Check final status after timeout
-        const finalStatus = await getConnectionStatus(connectionId);
-        if (finalStatus.status !== 'ACTIVE') {
+        connectionDetails = await getConnectionDetails(connectionId);
+        if (connectionDetails.status !== 'ACTIVE') {
           log.warn('Connection failed to become active', {
-            userId: session.user.id,
             connectionId,
-            finalStatus: finalStatus.status,
+            finalStatus: connectionDetails.status,
           });
           return NextResponse.redirect(
-            new URL(`/integrations?error=connection_timeout`, request.url)
+            new URL('/integrations?error=connection_timeout', request.url)
           );
         }
       }
     }
+
+    // Get userId from Composio connection (entityId is our app's userId)
+    const userId = connectionDetails.userId;
+
+    if (!userId) {
+      log.error('No userId found in connection', { connectionId, connectionDetails });
+      return NextResponse.redirect(
+        new URL('/integrations?error=missing_user_id', request.url)
+      );
+    }
+
+    log.info('Connection active, saving to database', {
+      connectionId,
+      userId,
+    });
 
     // Check if integration already exists
     const existing = await db
@@ -67,7 +80,7 @@ export async function GET(request: Request) {
       .from(userIntegrations)
       .where(
         and(
-          eq(userIntegrations.userId, session.user.id),
+          eq(userIntegrations.userId, userId),
           eq(userIntegrations.provider, 'google-calendar')
         )
       )
@@ -85,20 +98,20 @@ export async function GET(request: Request) {
         .where(eq(userIntegrations.id, existing[0].id));
 
       log.info('Updated existing Google Calendar integration', {
-        userId: session.user.id,
+        userId,
         integrationId: existing[0].id,
       });
     } else {
       // Create new
       await db.insert(userIntegrations).values({
-        userId: session.user.id,
+        userId,
         provider: 'google-calendar',
         connectedAccountId: connectionId,
         status: 'active',
       });
 
       log.info('Created new Google Calendar integration', {
-        userId: session.user.id,
+        userId,
         connectionId,
       });
     }

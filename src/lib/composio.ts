@@ -102,19 +102,22 @@ export async function initiateGoogleCalendarConnection(
 }
 
 /**
- * Get connection status for a user
+ * Get connection details including the userId (entityId)
  */
-export async function getConnectionStatus(connectionId: string) {
+export async function getConnectionDetails(connectionId: string) {
   try {
     const account = await composio.connectedAccounts.get(connectionId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const accountAny = account as any;
 
     return {
       status: account.status,
-      toolkitSlug: account.toolkit.slug,
+      toolkitSlug: account.toolkit?.slug,
       createdAt: account.createdAt,
+      userId: accountAny.entityId || accountAny.member?.id || null,
     };
   } catch (error) {
-    logger.error('Failed to get connection status', error, { connectionId });
+    logger.error('Failed to get connection details', error, { connectionId });
     throw error;
   }
 }
