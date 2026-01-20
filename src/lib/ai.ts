@@ -459,10 +459,15 @@ IMPORTANT for notes: When creating a note, analyze the content and suggest 1-3 r
   if (hasCalendarTools) {
     systemPrompt += `
 
-IMPORTANT for calendar events: When creating calendar events, use the Google Calendar tools. Make sure to include:
-- A descriptive summary/title
-- Start and end times in ISO format with timezone
-- Optional: description, location, attendees`;
+GOOGLE CALENDAR TOOLS: You have access to the following calendar tools:
+- GOOGLECALENDAR_LIST_EVENTS: List/view calendar events in a date range. Use this when users ask to see their calendar, what events they have, or what's scheduled.
+- GOOGLECALENDAR_CREATE_EVENT: Create new calendar events with summary, start/end times, description, location.
+- GOOGLECALENDAR_GET_EVENT: Get details of a specific event by ID.
+- GOOGLECALENDAR_UPDATE_EVENT: Modify an existing event by ID.
+- GOOGLECALENDAR_DELETE_EVENT: Delete an event by ID.
+
+When users ask about their schedule, what they have today/tomorrow, or to list their events, use GOOGLECALENDAR_LIST_EVENTS.
+When creating events, include: summary/title, start and end times in ISO format with timezone, and optionally description, location, attendees.`;
   }
 
   systemPrompt += `
