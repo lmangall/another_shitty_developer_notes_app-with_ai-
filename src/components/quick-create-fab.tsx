@@ -236,8 +236,8 @@ export function QuickCreateFAB() {
               }
               break;
 
-            case 'tool-call':
-              // Tool call starting
+            case 'tool-input-start':
+              // Tool starting - show spinner
               if (event.toolCallId && event.toolName) {
                 const invocation: ToolInvocation = {
                   toolCallId: event.toolCallId as string,
@@ -249,14 +249,14 @@ export function QuickCreateFAB() {
               }
               break;
 
-            case 'tool-result':
-              // Tool completed
+            case 'tool-output-available':
+              // Tool completed - show result
               if (event.toolCallId) {
                 const existing = toolCalls.get(event.toolCallId as string);
                 if (existing) {
-                  const result = event.result as ToolResult | undefined;
-                  existing.state = result?.success !== false ? 'completed' : 'error';
-                  existing.result = result;
+                  const output = event.output as ToolResult | undefined;
+                  existing.state = output?.success !== false ? 'completed' : 'error';
+                  existing.result = output;
                   toolCalls.set(event.toolCallId as string, existing);
                   setActiveToolCalls(new Map(toolCalls));
                 }
@@ -443,7 +443,7 @@ export function QuickCreateFAB() {
           <DialogHeader className="px-4 py-3 border-b">
             <div className="flex items-center justify-between">
               <DialogTitle className="text-lg">AI Assistant</DialogTitle>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 mr-6">
                 {/* Conversation selector */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
