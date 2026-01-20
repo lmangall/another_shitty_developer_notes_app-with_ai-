@@ -145,18 +145,16 @@ export function QuickCreateFAB() {
     setActiveToolCalls(new Map());
   }, []);
 
-  // Parse UI message stream line
-  const parseStreamLine = (line: string): { type: string; data: unknown } | null => {
-    // Format: "type:json_data"
-    const colonIndex = line.indexOf(':');
-    if (colonIndex === -1) return null;
-
-    const type = line.substring(0, colonIndex);
-    const jsonStr = line.substring(colonIndex + 1);
+  // Parse SSE stream line
+  // Format: "data: {json}" where json has a "type" field
+  const parseStreamLine = (line: string): { type: string; [key: string]: unknown } | null => {
+    if (!line.startsWith('data: ')) return null;
+    const jsonStr = line.substring(6); // Remove "data: " prefix
+    if (jsonStr === '[DONE]') return null;
 
     try {
       const data = JSON.parse(jsonStr);
-      return { type, data };
+      return data;
     } catch {
       return null;
     }
@@ -226,40 +224,40 @@ export function QuickCreateFAB() {
         for (const line of lines) {
           if (!line.trim()) continue;
 
-          const parsed = parseStreamLine(line);
-          if (!parsed) continue;
+          const event = parseStreamLine(line);
+          if (!event) continue;
 
-          const { type, data } = parsed;
-
-          switch (type) {
-            case '0': // Text delta
-              if (typeof data === 'string') {
-                fullContent += data;
+          switch (event.type) {
+            case 'text-delta':
+              // Format: {"type":"text-delta","id":"0","delta":"text"}
+              if (typeof event.delta === 'string') {
+                fullContent += event.delta;
                 setStreamingContent(fullContent);
               }
               break;
 
-            case '9': // Tool call start
-              if (data && typeof data === 'object' && 'toolCallId' in data) {
-                const toolData = data as { toolCallId: string; toolName: string };
+            case 'tool-call':
+              // Tool call starting
+              if (event.toolCallId && event.toolName) {
                 const invocation: ToolInvocation = {
-                  toolCallId: toolData.toolCallId,
-                  toolName: toolData.toolName,
+                  toolCallId: event.toolCallId as string,
+                  toolName: event.toolName as string,
                   state: 'running',
                 };
-                toolCalls.set(toolData.toolCallId, invocation);
+                toolCalls.set(event.toolCallId as string, invocation);
                 setActiveToolCalls(new Map(toolCalls));
               }
               break;
 
-            case 'a': // Tool result
-              if (data && typeof data === 'object' && 'toolCallId' in data) {
-                const resultData = data as { toolCallId: string; result: ToolResult };
-                const existing = toolCalls.get(resultData.toolCallId);
+            case 'tool-result':
+              // Tool completed
+              if (event.toolCallId) {
+                const existing = toolCalls.get(event.toolCallId as string);
                 if (existing) {
-                  existing.state = resultData.result?.success !== false ? 'completed' : 'error';
-                  existing.result = resultData.result;
-                  toolCalls.set(resultData.toolCallId, existing);
+                  const result = event.result as ToolResult | undefined;
+                  existing.state = result?.success !== false ? 'completed' : 'error';
+                  existing.result = result;
+                  toolCalls.set(event.toolCallId as string, existing);
                   setActiveToolCalls(new Map(toolCalls));
                 }
               }
