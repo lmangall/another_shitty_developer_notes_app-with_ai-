@@ -36,7 +36,7 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [open, setOpen] = useState(true);
-  const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('edit');
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
 
   useEffect(() => {
     fetchNote();

@@ -10,9 +10,8 @@ import {
   Code,
   Hash,
   Eye,
-  EyeOff,
+  Pencil,
   Link2,
-  Columns2,
   ListChecks,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,8 +25,8 @@ interface MarkdownEditorProps {
   minRows?: number;
   className?: string;
   onSave?: () => void;
-  viewMode?: 'edit' | 'preview' | 'split';
-  onViewModeChange?: (mode: 'edit' | 'preview' | 'split') => void;
+  viewMode?: 'edit' | 'preview';
+  onViewModeChange?: (mode: 'edit' | 'preview') => void;
   showToolbar?: boolean;
   autoFocus?: boolean;
 }
@@ -46,9 +45,15 @@ export function MarkdownEditor({
 }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Focus textarea when autoFocus is true
+  // Focus textarea when switching to edit mode or on autoFocus
   useEffect(() => {
-    if (autoFocus && textareaRef.current && viewMode !== 'preview') {
+    if (viewMode === 'edit' && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (autoFocus && textareaRef.current && viewMode === 'edit') {
       textareaRef.current.focus();
     }
   }, [autoFocus, viewMode]);
@@ -73,13 +78,11 @@ export function MarkdownEditor({
       setTimeout(() => {
         textarea.focus();
         if (selected) {
-          // Keep selection after formatting
           textarea.setSelectionRange(
             start + prefix.length,
             start + prefix.length + selected.length
           );
         } else {
-          // Place cursor between markers
           textarea.setSelectionRange(start + prefix.length, start + prefix.length);
         }
       }, 0);
@@ -115,14 +118,12 @@ export function MarkdownEditor({
     const end = textarea.selectionEnd;
     const selected = value.substring(start, end);
 
-    // If text is selected, wrap it as link text
     if (selected) {
       const newText =
         value.substring(0, start) + `[${selected}](url)` + value.substring(end);
       onChange(newText);
       setTimeout(() => {
         textarea.focus();
-        // Select "url" so user can type the URL
         textarea.setSelectionRange(
           start + selected.length + 3,
           start + selected.length + 6
@@ -133,7 +134,6 @@ export function MarkdownEditor({
       onChange(newText);
       setTimeout(() => {
         textarea.focus();
-        // Select "text" so user can type the link text
         textarea.setSelectionRange(start + 1, start + 5);
       }, 0);
     }
@@ -181,7 +181,6 @@ export function MarkdownEditor({
         const { selectionStart } = textarea;
         const text = value;
 
-        // Find the start of the current line
         const lineStart = text.lastIndexOf('\n', selectionStart - 1) + 1;
         const lineEnd = text.indexOf('\n', selectionStart);
         const currentLine = text.substring(
@@ -189,7 +188,6 @@ export function MarkdownEditor({
           lineEnd === -1 ? text.length : lineEnd
         );
 
-        // Check for list patterns
         const bulletMatch = currentLine.match(/^(\s*)([-*])\s/);
         const checkboxMatch = currentLine.match(/^(\s*)([-*])\s\[([ xX])\]\s/);
         const numberedMatch = currentLine.match(/^(\s*)(\d+)\.\s/);
@@ -244,12 +242,12 @@ export function MarkdownEditor({
     [value, onChange, insertFormat, insertLink, onSave]
   );
 
-  const cycleViewMode = useCallback(() => {
-    if (!onViewModeChange) return;
-    const modes: Array<'edit' | 'preview' | 'split'> = ['edit', 'split', 'preview'];
-    const currentIndex = modes.indexOf(viewMode);
-    const nextMode = modes[(currentIndex + 1) % modes.length];
-    onViewModeChange(nextMode);
+  const switchToEdit = useCallback(() => {
+    onViewModeChange?.('edit');
+  }, [onViewModeChange]);
+
+  const toggleViewMode = useCallback(() => {
+    onViewModeChange?.(viewMode === 'edit' ? 'preview' : 'edit');
   }, [viewMode, onViewModeChange]);
 
   const wordCount = value.trim()
@@ -259,14 +257,13 @@ export function MarkdownEditor({
         .filter((word) => word.length > 0).length
     : 0;
 
-  const showEditor = viewMode === 'edit' || viewMode === 'split';
-  const showPreview = viewMode === 'preview' || viewMode === 'split';
+  const isEditMode = viewMode === 'edit';
 
   return (
     <div className={cn('border rounded-lg overflow-hidden', className)}>
       {showToolbar && (
         <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30">
-          {showEditor && (
+          {isEditMode && (
             <>
               <Button
                 type="button"
@@ -347,72 +344,44 @@ export function MarkdownEditor({
           {onViewModeChange && (
             <Button
               type="button"
-              variant={viewMode !== 'edit' ? 'secondary' : 'ghost'}
+              variant={isEditMode ? 'ghost' : 'secondary'}
               size="sm"
               className="h-8 px-2 gap-1"
-              onClick={cycleViewMode}
-              title={
-                viewMode === 'edit'
-                  ? 'Split view'
-                  : viewMode === 'split'
-                    ? 'Preview only'
-                    : 'Edit only'
-              }
+              onClick={toggleViewMode}
+              title={isEditMode ? 'Preview (see rendered markdown)' : 'Edit (raw markdown)'}
             >
-              {viewMode === 'edit' && <Eye size={16} />}
-              {viewMode === 'split' && <Columns2 size={16} />}
-              {viewMode === 'preview' && <EyeOff size={16} />}
-              <span className="text-xs">
-                {viewMode === 'edit' && 'Preview'}
-                {viewMode === 'split' && 'Split'}
-                {viewMode === 'preview' && 'Edit'}
-              </span>
+              {isEditMode ? <Eye size={16} /> : <Pencil size={16} />}
+              <span className="text-xs">{isEditMode ? 'Preview' : 'Edit'}</span>
             </Button>
           )}
         </div>
       )}
 
-      <div
-        className={cn(
-          'flex',
-          viewMode === 'split' ? 'divide-x' : '',
-          viewMode === 'split' && 'min-h-[300px]'
-        )}
-      >
-        {showEditor && (
-          <div className={cn('flex-1', viewMode === 'split' && 'w-1/2')}>
-            <Textarea
-              ref={textareaRef}
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={minRows}
-              placeholder={placeholder}
-              className={cn(
-                'min-h-[300px] border-0 rounded-none focus-visible:ring-0 resize-none',
-                viewMode === 'split' && 'h-full'
-              )}
-            />
-          </div>
-        )}
-
-        {showPreview && (
-          <div
-            className={cn(
-              'flex-1 p-3 overflow-auto',
-              viewMode === 'split' && 'w-1/2 bg-muted/20'
+      {isEditMode ? (
+        <Textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={minRows}
+          placeholder={placeholder}
+          className="min-h-[300px] border-0 rounded-none focus-visible:ring-0 resize-none"
+        />
+      ) : (
+        <div
+          className="p-3 min-h-[300px] cursor-text"
+          onClick={switchToEdit}
+          title="Click to edit"
+        >
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            {value ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
+            ) : (
+              <p className="text-muted-foreground italic">Click to start writing...</p>
             )}
-          >
-            <div className="prose prose-sm max-w-none dark:prose-invert">
-              {value ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
-              ) : (
-                <p className="text-muted-foreground italic">Nothing to preview</p>
-              )}
-            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
