@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useChat } from '@ai-sdk/react';
 import {
   Plus,
   Mic,
@@ -12,7 +13,10 @@ import {
   MessageSquare,
   Trash2,
   ChevronDown,
+  Wrench,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -29,40 +33,61 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-interface ToolResult {
-  success: boolean;
-  action: string;
-  message?: string;
-  error?: string;
-}
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  toolResults?: ToolResult[];
-}
-
 interface Conversation {
   id: string;
   title: string;
   updatedAt: string;
 }
 
+interface LoadedMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  toolResults?: Array<{
+    success: boolean;
+    action: string;
+    message?: string;
+    error?: string;
+  }>;
+}
+
+// Helper to format tool names for display
+function formatToolName(name: string): string {
+  return name
+    .replace(/^tool-/, '')
+    .replace(/_/g, ' ')
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (s) => s.toUpperCase())
+    .trim();
+}
+
 export function QuickCreateFAB() {
   const [open, setOpen] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [streamingContent, setStreamingContent] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Use the AI SDK's useChat hook
+  const {
+    messages,
+    setMessages,
+    sendMessage,
+    status,
+    stop,
+  } = useChat({
+    api: '/api/ai/chat',
+    onFinish: () => {
+      // Refresh conversations list after message completes
+      loadConversations();
+    },
+  });
+
+  const isLoading = status === 'streaming' || status === 'submitted';
 
   // Load conversations
   const loadConversations = useCallback(async () => {
@@ -84,17 +109,20 @@ export function QuickCreateFAB() {
       if (res.ok) {
         const data = await res.json();
         setConversationId(id);
-        setMessages(data.messages.map((msg: Message) => ({
+        // Convert loaded messages to the format expected by useChat
+        const loadedMessages = data.messages.map((msg: LoadedMessage) => ({
           id: msg.id,
           role: msg.role,
-          content: msg.content,
-          toolResults: msg.toolResults,
-        })));
+          parts: [
+            { type: 'text' as const, text: msg.content },
+          ],
+        }));
+        setMessages(loadedMessages);
       }
     } catch (error) {
       console.error('Failed to load conversation:', error);
     }
-  }, []);
+  }, [setMessages]);
 
   // Delete conversation
   const deleteConversation = useCallback(async (id: string) => {
@@ -116,95 +144,7 @@ export function QuickCreateFAB() {
     setConversationId(null);
     setMessages([]);
     setInput('');
-    setStreamingContent('');
-  }, []);
-
-  // Send message with streaming
-  const sendMessage = useCallback(async (messageText: string) => {
-    if (!messageText.trim() || isLoading) return;
-
-    // Add user message optimistically
-    const userMessage: Message = {
-      id: `temp-${Date.now()}`,
-      role: 'user',
-      content: messageText,
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-    setStreamingContent('');
-
-    // Create abort controller
-    abortControllerRef.current = new AbortController();
-
-    try {
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversationId,
-          message: messageText,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}));
-        throw new Error(error.error || 'Failed to send message');
-      }
-
-      // Get conversation ID from headers
-      const newConvId = res.headers.get('X-Conversation-Id');
-      if (newConvId && !conversationId) {
-        setConversationId(newConvId);
-      }
-
-      // Read the stream
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No response body');
-
-      const decoder = new TextDecoder();
-      let fullContent = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        fullContent += chunk;
-        setStreamingContent(fullContent);
-      }
-
-      // Add assistant message
-      const assistantMessage: Message = {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: fullContent,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setStreamingContent('');
-
-      // Refresh conversations list
-      loadConversations();
-    } catch (error) {
-      if ((error as Error).name === 'AbortError') {
-        console.log('Request aborted');
-      } else {
-        console.error('Failed to send message:', error);
-        // Show error in UI
-        const errorMessage: Message = {
-          id: `error-${Date.now()}`,
-          role: 'assistant',
-          content: `Error: ${(error as Error).message}`,
-        };
-        setMessages((prev) => [...prev, errorMessage]);
-      }
-    } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
-  }, [conversationId, isLoading, loadConversations]);
+  }, [setMessages]);
 
   // Speech recognition setup
   useEffect(() => {
@@ -259,7 +199,7 @@ export function QuickCreateFAB() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, streamingContent]);
+  }, [messages]);
 
   const toggleListening = () => {
     if (!recognitionRef.current) return;
@@ -280,16 +220,139 @@ export function QuickCreateFAB() {
         recognitionRef.current.stop();
         setIsListening(false);
       }
-      // Abort any ongoing request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      // Stop any ongoing request
+      if (isLoading) {
+        stop();
       }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    sendMessage(input);
+    if (!input.trim() || isLoading) return;
+
+    const messageText = input;
+    setInput('');
+
+    // Send message with body containing conversationId and timezone
+    const response = await sendMessage(
+      { role: 'user', content: messageText },
+      {
+        body: {
+          conversationId,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+      }
+    );
+
+    // Capture conversation ID from response headers if available
+    if (response && 'headers' in response) {
+      const newConvId = (response as Response).headers.get('X-Conversation-Id');
+      if (newConvId && !conversationId) {
+        setConversationId(newConvId);
+      }
+    }
+  };
+
+  // Type guard for tool parts
+  const isToolPart = (part: { type: string }): part is {
+    type: string;
+    toolCallId: string;
+    toolName?: string;
+    state: string;
+    input?: unknown;
+    output?: unknown;
+    errorText?: string;
+  } => {
+    return part.type.startsWith('tool-') || part.type === 'dynamic-tool';
+  };
+
+  // Render a message part (text or tool invocation)
+  const renderMessagePart = (part: { type: string; text?: string; [key: string]: unknown }, index: number) => {
+    if (part.type === 'text') {
+      if (!part.text) return null;
+      return (
+        <div key={index} className="prose prose-sm max-w-none dark:prose-invert">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
+        </div>
+      );
+    }
+
+    // Handle tool invocation parts (type starts with 'tool-')
+    if (isToolPart(part)) {
+      const toolName = part.toolName || part.type.replace(/^tool-/, '');
+      const displayName = formatToolName(toolName);
+      const state = part.state;
+
+      // Tool is being called (streaming input or input ready)
+      if (state === 'input-streaming' || state === 'input-available') {
+        return (
+          <div
+            key={index}
+            className="flex items-center gap-2 text-xs px-2 py-1.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 my-1"
+          >
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <Wrench className="h-3 w-3" />
+            <span className="font-medium">{displayName}</span>
+            <span className="text-blue-600 dark:text-blue-300">Running...</span>
+          </div>
+        );
+      }
+
+      // Tool completed successfully
+      if (state === 'output-available') {
+        const result = part.output as {
+          success?: boolean;
+          action?: string;
+          message?: string;
+          error?: string;
+        } | undefined;
+
+        const success = result?.success ?? true;
+
+        return (
+          <div
+            key={index}
+            className={`flex items-center gap-2 text-xs px-2 py-1 rounded my-1 ${
+              success
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+            }`}
+          >
+            {success ? (
+              <CheckCircle className="h-3 w-3" />
+            ) : (
+              <XCircle className="h-3 w-3" />
+            )}
+            <span className="font-medium">{result?.action || displayName}</span>
+            {result?.message && <span className="truncate">{result.message}</span>}
+            {result?.error && <span className="truncate">{result.error}</span>}
+          </div>
+        );
+      }
+
+      // Tool failed
+      if (state === 'output-error') {
+        return (
+          <div
+            key={index}
+            className="flex items-center gap-2 text-xs px-2 py-1 rounded my-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+          >
+            <XCircle className="h-3 w-3" />
+            <span className="font-medium">{displayName}</span>
+            <span className="truncate">{part.errorText || 'Failed'}</span>
+          </div>
+        );
+      }
+    }
+
+    return null;
+  };
+
+  // Get text content from message parts for user messages
+  const getMessageText = (message: { parts: Array<{ type: string; text?: string }> }): string => {
+    const textPart = message.parts.find(p => p.type === 'text');
+    return textPart?.text || '';
   };
 
   return (
@@ -363,7 +426,7 @@ export function QuickCreateFAB() {
           {/* Messages area */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4" ref={scrollRef}>
             <div className="py-4 space-y-4">
-              {messages.length === 0 && !streamingContent && (
+              {messages.length === 0 && (
                 <div className="text-center text-muted-foreground py-8">
                   <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p className="text-sm">Start a conversation</p>
@@ -383,47 +446,18 @@ export function QuickCreateFAB() {
                         : 'bg-muted'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-
-                    {/* Tool results */}
-                    {message.role === 'assistant' && message.toolResults && message.toolResults.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {message.toolResults.map((tr, idx) => (
-                          <div
-                            key={idx}
-                            className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${
-                              tr.success
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                            }`}
-                          >
-                            {tr.success ? (
-                              <CheckCircle className="h-3 w-3" />
-                            ) : (
-                              <XCircle className="h-3 w-3" />
-                            )}
-                            <span className="font-medium">{tr.action}</span>
-                            {tr.message && <span className="truncate">{tr.message}</span>}
-                            {tr.error && <span className="truncate">{tr.error}</span>}
-                          </div>
-                        ))}
-                      </div>
+                    {message.role === 'user' ? (
+                      <p className="text-sm whitespace-pre-wrap">{getMessageText(message)}</p>
+                    ) : (
+                      // Render message parts (text + tool invocations)
+                      message.parts.map((part, idx) => renderMessagePart(part as { type: string; text?: string }, idx))
                     )}
                   </div>
                 </div>
               ))}
 
-              {/* Streaming content */}
-              {streamingContent && (
-                <div className="flex justify-start">
-                  <div className="max-w-[85%] rounded-lg px-3 py-2 bg-muted">
-                    <p className="text-sm whitespace-pre-wrap">{streamingContent}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Loading indicator */}
-              {isLoading && !streamingContent && (
+              {/* Loading indicator when waiting for first response */}
+              {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
                 <div className="flex justify-start">
                   <div className="bg-muted rounded-lg px-3 py-2">
                     <Loader2 className="h-4 w-4 animate-spin" />

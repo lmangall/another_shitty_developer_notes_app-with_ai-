@@ -30,7 +30,7 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
   const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview');
 
   useEffect(() => {
     fetchNote();

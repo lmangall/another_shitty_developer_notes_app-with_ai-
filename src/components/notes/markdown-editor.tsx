@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -38,25 +38,31 @@ export function MarkdownEditor({
   minRows = 15,
   className,
   onSave,
-  viewMode = 'edit',
+  viewMode = 'preview',
   onViewModeChange,
   showToolbar = true,
   autoFocus = false,
 }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [internalMode, setInternalMode] = useState<'edit' | 'preview'>(viewMode);
 
-  // Focus textarea when switching to edit mode or on autoFocus
+  // Sync internal mode with prop
   useEffect(() => {
-    if (viewMode === 'edit' && textareaRef.current) {
-      textareaRef.current.focus();
-    }
+    setInternalMode(viewMode);
   }, [viewMode]);
 
+  // Focus textarea when switching to edit mode
   useEffect(() => {
-    if (autoFocus && textareaRef.current && viewMode === 'edit') {
+    if (internalMode === 'edit' && textareaRef.current) {
       textareaRef.current.focus();
     }
-  }, [autoFocus, viewMode]);
+  }, [internalMode]);
+
+  useEffect(() => {
+    if (autoFocus && textareaRef.current && internalMode === 'edit') {
+      textareaRef.current.focus();
+    }
+  }, [autoFocus, internalMode]);
 
   const insertFormat = useCallback(
     (prefix: string, suffix: string = prefix) => {
@@ -173,6 +179,14 @@ export function MarkdownEditor({
         }
       }
 
+      // Escape to switch to preview
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setInternalMode('preview');
+        onViewModeChange?.('preview');
+        return;
+      }
+
       // Enter key - handle list continuation
       if (e.key === 'Enter' && !e.shiftKey && !isMod) {
         const textarea = textareaRef.current;
@@ -239,16 +253,19 @@ export function MarkdownEditor({
         }
       }
     },
-    [value, onChange, insertFormat, insertLink, onSave]
+    [value, onChange, insertFormat, insertLink, onSave, onViewModeChange]
   );
 
   const switchToEdit = useCallback(() => {
+    setInternalMode('edit');
     onViewModeChange?.('edit');
   }, [onViewModeChange]);
 
   const toggleViewMode = useCallback(() => {
-    onViewModeChange?.(viewMode === 'edit' ? 'preview' : 'edit');
-  }, [viewMode, onViewModeChange]);
+    const newMode = internalMode === 'edit' ? 'preview' : 'edit';
+    setInternalMode(newMode);
+    onViewModeChange?.(newMode);
+  }, [internalMode, onViewModeChange]);
 
   const wordCount = value.trim()
     ? value
@@ -257,103 +274,118 @@ export function MarkdownEditor({
         .filter((word) => word.length > 0).length
     : 0;
 
-  const isEditMode = viewMode === 'edit';
+  const isEditMode = internalMode === 'edit';
 
   return (
     <div className={cn('border rounded-lg overflow-hidden', className)}>
       {showToolbar && (
         <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30">
-          {isEditMode && (
-            <>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => insertFormat('**')}
-                title="Bold (Cmd+B)"
-              >
-                <Bold size={16} />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => insertFormat('*')}
-                title="Italic (Cmd+I)"
-              >
-                <Italic size={16} />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => insertFormat('`')}
-                title="Inline code (Cmd+E)"
-              >
-                <Code size={16} />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={insertLink}
-                title="Link (Cmd+K)"
-              >
-                <Link2 size={16} />
-              </Button>
-              <div className="w-px h-5 bg-border mx-1" />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => insertAtLineStart('- ')}
-                title="List item"
-              >
-                <List size={16} />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => insertAtLineStart('- [ ] ')}
-                title="Checkbox"
-              >
-                <ListChecks size={16} />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => insertAtLineStart('## ')}
-                title="Heading"
-              >
-                <Hash size={16} />
-              </Button>
-            </>
-          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              if (!isEditMode) switchToEdit();
+              setTimeout(() => insertFormat('**'), 10);
+            }}
+            title="Bold (Cmd+B)"
+          >
+            <Bold size={16} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              if (!isEditMode) switchToEdit();
+              setTimeout(() => insertFormat('*'), 10);
+            }}
+            title="Italic (Cmd+I)"
+          >
+            <Italic size={16} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              if (!isEditMode) switchToEdit();
+              setTimeout(() => insertFormat('`'), 10);
+            }}
+            title="Inline code (Cmd+E)"
+          >
+            <Code size={16} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              if (!isEditMode) switchToEdit();
+              setTimeout(() => insertLink(), 10);
+            }}
+            title="Link (Cmd+K)"
+          >
+            <Link2 size={16} />
+          </Button>
+          <div className="w-px h-5 bg-border mx-1" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              if (!isEditMode) switchToEdit();
+              setTimeout(() => insertAtLineStart('- '), 10);
+            }}
+            title="List item"
+          >
+            <List size={16} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              if (!isEditMode) switchToEdit();
+              setTimeout(() => insertAtLineStart('- [ ] '), 10);
+            }}
+            title="Checkbox"
+          >
+            <ListChecks size={16} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              if (!isEditMode) switchToEdit();
+              setTimeout(() => insertAtLineStart('## '), 10);
+            }}
+            title="Heading"
+          >
+            <Hash size={16} />
+          </Button>
           <span className="ml-auto text-xs text-muted-foreground mr-2">
             {wordCount} words
           </span>
-          {onViewModeChange && (
-            <Button
-              type="button"
-              variant={isEditMode ? 'ghost' : 'secondary'}
-              size="sm"
-              className="h-8 px-2 gap-1"
-              onClick={toggleViewMode}
-              title={isEditMode ? 'Preview (see rendered markdown)' : 'Edit (raw markdown)'}
-            >
-              {isEditMode ? <Eye size={16} /> : <Pencil size={16} />}
-              <span className="text-xs">{isEditMode ? 'Preview' : 'Edit'}</span>
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant={isEditMode ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-8 px-2 gap-1"
+            onClick={toggleViewMode}
+            title={isEditMode ? 'Preview (Esc)' : 'Edit raw markdown'}
+          >
+            {isEditMode ? <Eye size={16} /> : <Pencil size={16} />}
+            <span className="text-xs">{isEditMode ? 'Preview' : 'Raw'}</span>
+          </Button>
         </div>
       )}
 
