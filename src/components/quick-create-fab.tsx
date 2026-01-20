@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useChat } from '@ai-sdk/react';
 import {
   Plus,
   Mic,
@@ -33,28 +32,36 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
+interface ToolResult {
+  success: boolean;
+  action: string;
+  message?: string;
+  error?: string;
+}
+
+interface ToolInvocation {
+  toolCallId: string;
+  toolName: string;
+  state: 'running' | 'completed' | 'error';
+  result?: ToolResult;
+}
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  toolInvocations?: ToolInvocation[];
+}
+
 interface Conversation {
   id: string;
   title: string;
   updatedAt: string;
 }
 
-interface LoadedMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  toolResults?: Array<{
-    success: boolean;
-    action: string;
-    message?: string;
-    error?: string;
-  }>;
-}
-
 // Helper to format tool names for display
 function formatToolName(name: string): string {
   return name
-    .replace(/^tool-/, '')
     .replace(/_/g, ' ')
     .replace(/([A-Z])/g, ' $1')
     .replace(/^./, (s) => s.toUpperCase())
@@ -65,29 +72,17 @@ export function QuickCreateFAB() {
   const [open, setOpen] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
+  const [activeToolCalls, setActiveToolCalls] = useState<Map<string, ToolInvocation>>(new Map());
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Use the AI SDK's useChat hook
-  const {
-    messages,
-    setMessages,
-    sendMessage,
-    status,
-    stop,
-  } = useChat({
-    api: '/api/ai/chat',
-    onFinish: () => {
-      // Refresh conversations list after message completes
-      loadConversations();
-    },
-  });
-
-  const isLoading = status === 'streaming' || status === 'submitted';
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Load conversations
   const loadConversations = useCallback(async () => {
@@ -109,20 +104,22 @@ export function QuickCreateFAB() {
       if (res.ok) {
         const data = await res.json();
         setConversationId(id);
-        // Convert loaded messages to the format expected by useChat
-        const loadedMessages = data.messages.map((msg: LoadedMessage) => ({
+        setMessages(data.messages.map((msg: Message & { toolResults?: ToolResult[] }) => ({
           id: msg.id,
           role: msg.role,
-          parts: [
-            { type: 'text' as const, text: msg.content },
-          ],
-        }));
-        setMessages(loadedMessages);
+          content: msg.content,
+          toolInvocations: msg.toolResults?.map((tr, idx) => ({
+            toolCallId: `${msg.id}-tool-${idx}`,
+            toolName: tr.action,
+            state: 'completed' as const,
+            result: tr,
+          })),
+        })));
       }
     } catch (error) {
       console.error('Failed to load conversation:', error);
     }
-  }, [setMessages]);
+  }, []);
 
   // Delete conversation
   const deleteConversation = useCallback(async (id: string) => {
@@ -144,7 +141,164 @@ export function QuickCreateFAB() {
     setConversationId(null);
     setMessages([]);
     setInput('');
-  }, [setMessages]);
+    setStreamingContent('');
+    setActiveToolCalls(new Map());
+  }, []);
+
+  // Parse UI message stream line
+  const parseStreamLine = (line: string): { type: string; data: unknown } | null => {
+    // Format: "type:json_data"
+    const colonIndex = line.indexOf(':');
+    if (colonIndex === -1) return null;
+
+    const type = line.substring(0, colonIndex);
+    const jsonStr = line.substring(colonIndex + 1);
+
+    try {
+      const data = JSON.parse(jsonStr);
+      return { type, data };
+    } catch {
+      return null;
+    }
+  };
+
+  // Send message with streaming
+  const sendMessage = useCallback(async (messageText: string) => {
+    if (!messageText.trim() || isLoading) return;
+
+    // Add user message optimistically
+    const userMessage: Message = {
+      id: `temp-${Date.now()}`,
+      role: 'user',
+      content: messageText,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+    setStreamingContent('');
+    setActiveToolCalls(new Map());
+
+    // Create abort controller
+    abortControllerRef.current = new AbortController();
+
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          message: messageText,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to send message');
+      }
+
+      // Get conversation ID from headers
+      const newConvId = res.headers.get('X-Conversation-Id');
+      if (newConvId && !conversationId) {
+        setConversationId(newConvId);
+      }
+
+      // Read the stream
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullContent = '';
+      const toolCalls = new Map<string, ToolInvocation>();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          const parsed = parseStreamLine(line);
+          if (!parsed) continue;
+
+          const { type, data } = parsed;
+
+          switch (type) {
+            case '0': // Text delta
+              if (typeof data === 'string') {
+                fullContent += data;
+                setStreamingContent(fullContent);
+              }
+              break;
+
+            case '9': // Tool call start
+              if (data && typeof data === 'object' && 'toolCallId' in data) {
+                const toolData = data as { toolCallId: string; toolName: string };
+                const invocation: ToolInvocation = {
+                  toolCallId: toolData.toolCallId,
+                  toolName: toolData.toolName,
+                  state: 'running',
+                };
+                toolCalls.set(toolData.toolCallId, invocation);
+                setActiveToolCalls(new Map(toolCalls));
+              }
+              break;
+
+            case 'a': // Tool result
+              if (data && typeof data === 'object' && 'toolCallId' in data) {
+                const resultData = data as { toolCallId: string; result: ToolResult };
+                const existing = toolCalls.get(resultData.toolCallId);
+                if (existing) {
+                  existing.state = resultData.result?.success !== false ? 'completed' : 'error';
+                  existing.result = resultData.result;
+                  toolCalls.set(resultData.toolCallId, existing);
+                  setActiveToolCalls(new Map(toolCalls));
+                }
+              }
+              break;
+          }
+        }
+      }
+
+      // Add assistant message with tool invocations
+      const assistantMessage: Message = {
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: fullContent,
+        toolInvocations: toolCalls.size > 0 ? Array.from(toolCalls.values()) : undefined,
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+      setStreamingContent('');
+      setActiveToolCalls(new Map());
+
+      // Refresh conversations list
+      loadConversations();
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        console.log('Request aborted');
+      } else {
+        console.error('Failed to send message:', error);
+        // Show error in UI
+        const errorMessage: Message = {
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          content: `Error: ${(error as Error).message}`,
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      }
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  }, [conversationId, isLoading, loadConversations]);
 
   // Speech recognition setup
   useEffect(() => {
@@ -199,7 +353,7 @@ export function QuickCreateFAB() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, streamingContent, activeToolCalls]);
 
   const toggleListening = () => {
     if (!recognitionRef.current) return;
@@ -220,139 +374,57 @@ export function QuickCreateFAB() {
         recognitionRef.current.stop();
         setIsListening(false);
       }
-      // Stop any ongoing request
-      if (isLoading) {
-        stop();
+      // Abort any ongoing request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const messageText = input;
-    setInput('');
-
-    // Send message with body containing conversationId and timezone
-    const response = await sendMessage(
-      { role: 'user', content: messageText },
-      {
-        body: {
-          conversationId,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        },
-      }
-    );
-
-    // Capture conversation ID from response headers if available
-    if (response && 'headers' in response) {
-      const newConvId = (response as Response).headers.get('X-Conversation-Id');
-      if (newConvId && !conversationId) {
-        setConversationId(newConvId);
-      }
-    }
+    sendMessage(input);
   };
 
-  // Type guard for tool parts
-  const isToolPart = (part: { type: string }): part is {
-    type: string;
-    toolCallId: string;
-    toolName?: string;
-    state: string;
-    input?: unknown;
-    output?: unknown;
-    errorText?: string;
-  } => {
-    return part.type.startsWith('tool-') || part.type === 'dynamic-tool';
-  };
+  // Render tool invocation
+  const renderToolInvocation = (tool: ToolInvocation) => {
+    const displayName = formatToolName(tool.toolName);
 
-  // Render a message part (text or tool invocation)
-  const renderMessagePart = (part: { type: string; text?: string; [key: string]: unknown }, index: number) => {
-    if (part.type === 'text') {
-      if (!part.text) return null;
+    if (tool.state === 'running') {
       return (
-        <div key={index} className="prose prose-sm max-w-none dark:prose-invert">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
+        <div
+          key={tool.toolCallId}
+          className="flex items-center gap-2 text-xs px-2 py-1.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 my-1"
+        >
+          <Loader2 className="h-3 w-3 animate-spin" />
+          <Wrench className="h-3 w-3" />
+          <span className="font-medium">{displayName}</span>
+          <span className="text-blue-600 dark:text-blue-300">Running...</span>
         </div>
       );
     }
 
-    // Handle tool invocation parts (type starts with 'tool-')
-    if (isToolPart(part)) {
-      const toolName = part.toolName || part.type.replace(/^tool-/, '');
-      const displayName = formatToolName(toolName);
-      const state = part.state;
+    const success = tool.result?.success !== false;
 
-      // Tool is being called (streaming input or input ready)
-      if (state === 'input-streaming' || state === 'input-available') {
-        return (
-          <div
-            key={index}
-            className="flex items-center gap-2 text-xs px-2 py-1.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 my-1"
-          >
-            <Loader2 className="h-3 w-3 animate-spin" />
-            <Wrench className="h-3 w-3" />
-            <span className="font-medium">{displayName}</span>
-            <span className="text-blue-600 dark:text-blue-300">Running...</span>
-          </div>
-        );
-      }
-
-      // Tool completed successfully
-      if (state === 'output-available') {
-        const result = part.output as {
-          success?: boolean;
-          action?: string;
-          message?: string;
-          error?: string;
-        } | undefined;
-
-        const success = result?.success ?? true;
-
-        return (
-          <div
-            key={index}
-            className={`flex items-center gap-2 text-xs px-2 py-1 rounded my-1 ${
-              success
-                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-            }`}
-          >
-            {success ? (
-              <CheckCircle className="h-3 w-3" />
-            ) : (
-              <XCircle className="h-3 w-3" />
-            )}
-            <span className="font-medium">{result?.action || displayName}</span>
-            {result?.message && <span className="truncate">{result.message}</span>}
-            {result?.error && <span className="truncate">{result.error}</span>}
-          </div>
-        );
-      }
-
-      // Tool failed
-      if (state === 'output-error') {
-        return (
-          <div
-            key={index}
-            className="flex items-center gap-2 text-xs px-2 py-1 rounded my-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-          >
-            <XCircle className="h-3 w-3" />
-            <span className="font-medium">{displayName}</span>
-            <span className="truncate">{part.errorText || 'Failed'}</span>
-          </div>
-        );
-      }
-    }
-
-    return null;
-  };
-
-  // Get text content from message parts for user messages
-  const getMessageText = (message: { parts: Array<{ type: string; text?: string }> }): string => {
-    const textPart = message.parts.find(p => p.type === 'text');
-    return textPart?.text || '';
+    return (
+      <div
+        key={tool.toolCallId}
+        className={`flex items-center gap-2 text-xs px-2 py-1 rounded my-1 ${
+          success
+            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+        }`}
+      >
+        {success ? (
+          <CheckCircle className="h-3 w-3" />
+        ) : (
+          <XCircle className="h-3 w-3" />
+        )}
+        <span className="font-medium">{tool.result?.action || displayName}</span>
+        {tool.result?.message && <span className="truncate">{tool.result.message}</span>}
+        {tool.result?.error && <span className="truncate">{tool.result.error}</span>}
+      </div>
+    );
   };
 
   return (
@@ -426,7 +498,7 @@ export function QuickCreateFAB() {
           {/* Messages area */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4" ref={scrollRef}>
             <div className="py-4 space-y-4">
-              {messages.length === 0 && (
+              {messages.length === 0 && !streamingContent && (
                 <div className="text-center text-muted-foreground py-8">
                   <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p className="text-sm">Start a conversation</p>
@@ -447,17 +519,46 @@ export function QuickCreateFAB() {
                     }`}
                   >
                     {message.role === 'user' ? (
-                      <p className="text-sm whitespace-pre-wrap">{getMessageText(message)}</p>
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                     ) : (
-                      // Render message parts (text + tool invocations)
-                      message.parts.map((part, idx) => renderMessagePart(part as { type: string; text?: string }, idx))
+                      <>
+                        <div className="prose prose-sm max-w-none dark:prose-invert">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                        </div>
+                        {/* Tool invocations */}
+                        {message.toolInvocations && message.toolInvocations.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {message.toolInvocations.map(renderToolInvocation)}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
               ))}
 
-              {/* Loading indicator when waiting for first response */}
-              {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
+              {/* Streaming content with active tool calls */}
+              {(streamingContent || activeToolCalls.size > 0) && (
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] rounded-lg px-3 py-2 bg-muted">
+                    {/* Show active tool calls */}
+                    {activeToolCalls.size > 0 && (
+                      <div className="space-y-1 mb-2">
+                        {Array.from(activeToolCalls.values()).map(renderToolInvocation)}
+                      </div>
+                    )}
+                    {/* Show streaming text */}
+                    {streamingContent && (
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Loading indicator */}
+              {isLoading && !streamingContent && activeToolCalls.size === 0 && (
                 <div className="flex justify-start">
                   <div className="bg-muted rounded-lg px-3 py-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
