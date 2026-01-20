@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit2, Trash2, Save, X, Bold, Italic, List, Code, Hash } from 'lucide-react';
+import { Edit2, Trash2, Save, X, Bold, Italic, List, Code, Hash, Eye, EyeOff } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [open, setOpen] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const insertFormat = (prefix: string, suffix: string = prefix) => {
@@ -166,68 +167,88 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
                 <div className="border rounded-lg overflow-hidden">
                   {/* Formatting Toolbar */}
                   <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => insertFormat('**')}
-                      title="Bold"
-                    >
-                      <Bold size={16} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => insertFormat('*')}
-                      title="Italic"
-                    >
-                      <Italic size={16} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => insertAtLineStart('- ')}
-                      title="List item"
-                    >
-                      <List size={16} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => insertFormat('`')}
-                      title="Inline code"
-                    >
-                      <Code size={16} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => insertAtLineStart('## ')}
-                      title="Heading"
-                    >
-                      <Hash size={16} />
-                    </Button>
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      Markdown
+                    {!showPreview && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => insertFormat('**')}
+                          title="Bold"
+                        >
+                          <Bold size={16} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => insertFormat('*')}
+                          title="Italic"
+                        >
+                          <Italic size={16} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => insertAtLineStart('- ')}
+                          title="List item"
+                        >
+                          <List size={16} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => insertFormat('`')}
+                          title="Inline code"
+                        >
+                          <Code size={16} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => insertAtLineStart('## ')}
+                          title="Heading"
+                        >
+                          <Hash size={16} />
+                        </Button>
+                      </>
+                    )}
+                    <span className="ml-auto text-xs text-muted-foreground mr-2">
+                      {showPreview ? 'Preview' : 'Markdown'}
                     </span>
+                    <Button
+                      type="button"
+                      variant={showPreview ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => setShowPreview(!showPreview)}
+                      title={showPreview ? 'Edit' : 'Preview'}
+                    >
+                      {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </Button>
                   </div>
-                  <Textarea
-                    ref={textareaRef}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    rows={15}
-                    placeholder="Write your note... (Markdown supported)"
-                    className="min-h-[300px] border-0 rounded-none focus-visible:ring-0"
-                  />
+                  {showPreview ? (
+                    <div className="prose prose-sm max-w-none dark:prose-invert p-3 min-h-[300px]">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <Textarea
+                      ref={textareaRef}
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      rows={15}
+                      placeholder="Write your note... (Markdown supported)"
+                      className="min-h-[300px] border-0 rounded-none focus-visible:ring-0"
+                    />
+                  )}
                 </div>
               ) : (
                 <div className="prose prose-sm max-w-none dark:prose-invert">

@@ -218,6 +218,12 @@ await resend.emails.send({
 
 ---
 
+## Vercel AI SDK
+
+**Full Documentation:** https://vercel.com/docs/llms-full.txt
+
+---
+
 ## Composio Integration
 
 **Documentation:** https://docs.composio.dev/llms.txt

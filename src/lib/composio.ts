@@ -21,6 +21,18 @@ export const GOOGLE_CALENDAR_ACTIONS = {
 export type GoogleCalendarAction = (typeof GOOGLE_CALENDAR_ACTIONS)[keyof typeof GOOGLE_CALENDAR_ACTIONS];
 
 /**
+ * List available auth configs for a toolkit
+ *
+ * @param toolkit - Optional toolkit slug to filter configs
+ * @returns List of available auth configs
+ */
+export async function listAuthConfigs(toolkit?: string) {
+  return composio.authConfigs.list({
+    ...(toolkit && { toolkit }),
+  });
+}
+
+/**
  * Get Google Calendar tools for a connected user
  * @param entityId - The user's ID (entityId used when creating the connection)
  */
@@ -54,9 +66,23 @@ export async function initiateGoogleCalendarConnection(
   callbackUrl: string
 ) {
   try {
+    // First get the auth config ID for Google Calendar
+    const configs = await composio.authConfigs.list({ toolkit: 'googlecalendar' });
+
+    if (!configs.items?.length) {
+      throw new Error('No auth config found for Google Calendar');
+    }
+
+    const authConfigId = configs.items[0].id;
+
+    logger.info('Found Google Calendar auth config', {
+      userId,
+      authConfigId,
+    });
+
     const connectionRequest = await composio.connectedAccounts.link(
       userId,
-      'googlecalendar',
+      authConfigId,
       { callbackUrl }
     );
 
