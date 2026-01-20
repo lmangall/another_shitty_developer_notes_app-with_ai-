@@ -108,6 +108,20 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// User integrations (Composio connections)
+export const userIntegrations = pgTable('user_integrations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(), // 'google-calendar', 'gmail', etc.
+  connectedAccountId: text('connected_account_id').notNull(), // Composio connection ID
+  status: text('status').notNull().default('active'), // active, expired, revoked
+  metadata: jsonb('metadata'), // Additional provider-specific data
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_user_integrations_user_provider').on(table.userId, table.provider),
+]);
+
 // Email audit log
 export const emailLogs = pgTable('email_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -142,3 +156,5 @@ export type Tag = typeof tags.$inferSelect;
 export type NewTag = typeof tags.$inferInsert;
 export type NoteTag = typeof noteTags.$inferSelect;
 export type NewNoteTag = typeof noteTags.$inferInsert;
+export type UserIntegration = typeof userIntegrations.$inferSelect;
+export type NewUserIntegration = typeof userIntegrations.$inferInsert;

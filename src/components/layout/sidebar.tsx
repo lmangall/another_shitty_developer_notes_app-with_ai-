@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { LayoutDashboard, FileText, Bell, Mail, Mic, LogOut, Sun, Moon, Menu, X, Trash2 } from 'lucide-react';
+import { LayoutDashboard, FileText, Bell, Mail, Mic, LogOut, Sun, Moon, Menu, X, Trash2, Plug } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/reminders', label: 'Reminders', icon: Bell },
   { href: '/logs', label: 'Email Logs', icon: Mail },
   { href: '/input', label: 'Quick Input', icon: Mic },
+  { href: '/integrations', label: 'Integrations', icon: Plug },
 ];
 
 function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {

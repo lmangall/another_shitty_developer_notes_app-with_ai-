@@ -2,7 +2,10 @@ import { generateText } from 'ai';
 import { gateway } from '@ai-sdk/gateway';
 import { z } from 'zod';
 import { db, notes, reminders, tags, noteTags } from '@/db';
+import { userIntegrations } from '@/db/schema';
 import { eq, desc, and, ilike, or } from 'drizzle-orm';
+import { getGoogleCalendarTools } from './composio';
+import { logger } from './logger';
 
 // Use Vercel AI Gateway with claude
 const model = gateway('anthropic/claude-sonnet-4.5');
@@ -12,10 +15,11 @@ export interface UserContext {
   notes: { id: string; title: string; preview: string; updatedAt: Date }[];
   reminders: { id: string; message: string; remindAt: Date | null; status: string }[];
   tags: { id: string; name: string; color: string }[];
+  integrations?: { provider: string; connectedAccountId: string }[];
 }
 
 export async function getUserContext(userId: string): Promise<UserContext> {
-  const [userNotes, userReminders, userTags] = await Promise.all([
+  const [userNotes, userReminders, userTags, userIntegrationsData] = await Promise.all([
     db
       .select({
         id: notes.id,
@@ -47,6 +51,13 @@ export async function getUserContext(userId: string): Promise<UserContext> {
       .from(tags)
       .where(eq(tags.userId, userId))
       .orderBy(tags.name),
+    db
+      .select({
+        provider: userIntegrations.provider,
+        connectedAccountId: userIntegrations.connectedAccountId,
+      })
+      .from(userIntegrations)
+      .where(and(eq(userIntegrations.userId, userId), eq(userIntegrations.status, 'active'))),
   ]);
 
   return {
@@ -63,6 +74,7 @@ export async function getUserContext(userId: string): Promise<UserContext> {
       status: r.status,
     })),
     tags: userTags,
+    integrations: userIntegrationsData,
   };
 }
 
@@ -426,10 +438,41 @@ export async function processWithAgent(
   });
 
   const contextStr = formatContextForPrompt(context);
-  const tools = createTools(userId, context.tags);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let tools: Record<string, any> = createTools(userId, context.tags);
 
-  const systemPrompt = `You are a helpful assistant that manages notes and reminders for the user.
-You have access to tools to create, edit, and delete notes, as well as create and cancel reminders.
+  // Check for Google Calendar integration and add calendar tools
+  const hasCalendarIntegration = context.integrations?.some((i) => i.provider === 'google-calendar');
+  let hasCalendarTools = false;
+
+  if (hasCalendarIntegration) {
+    try {
+      logger.debug('Fetching Google Calendar tools', { userId });
+      // Pass userId as entityId - this is how we identified the user when creating the connection
+      const calendarTools = await getGoogleCalendarTools(userId);
+      if (calendarTools && Object.keys(calendarTools).length > 0) {
+        tools = { ...tools, ...calendarTools };
+        hasCalendarTools = true;
+        logger.info('Added Google Calendar tools to agent', {
+          userId,
+          toolCount: Object.keys(calendarTools).length,
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to load Google Calendar tools', error, { userId });
+      // Continue without calendar tools
+    }
+  }
+
+  let systemPrompt = `You are a helpful assistant that manages notes and reminders for the user.
+You have access to tools to create, edit, and delete notes, as well as create and cancel reminders.`;
+
+  if (hasCalendarTools) {
+    systemPrompt += `
+You also have access to Google Calendar tools to create, list, update, and delete calendar events.`;
+  }
+
+  systemPrompt += `
 
 Current local time: ${localTimeString}
 Timezone: ${timezone} (${offsetString})
@@ -437,7 +480,18 @@ Timezone: ${timezone} (${offsetString})
 IMPORTANT for reminders: When the user specifies a time, convert it to an ISO datetime string accounting for their timezone (${timezone}).
 For relative times like "in 2 hours" or "tomorrow at 3pm", calculate the actual datetime based on the current time.
 
-IMPORTANT for notes: When creating a note, analyze the content and suggest 1-3 relevant tags from the user's available tags. Only use tags that exist in the user's tag list.
+IMPORTANT for notes: When creating a note, analyze the content and suggest 1-3 relevant tags from the user's available tags. Only use tags that exist in the user's tag list.`;
+
+  if (hasCalendarTools) {
+    systemPrompt += `
+
+IMPORTANT for calendar events: When creating calendar events, use the Google Calendar tools. Make sure to include:
+- A descriptive summary/title
+- Start and end times in ISO format with timezone
+- Optional: description, location, attendees`;
+  }
+
+  systemPrompt += `
 
 ${contextStr}
 

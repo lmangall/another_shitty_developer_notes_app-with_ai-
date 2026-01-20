@@ -22,22 +22,26 @@ export type GoogleCalendarAction = (typeof GOOGLE_CALENDAR_ACTIONS)[keyof typeof
 
 /**
  * Get Google Calendar tools for a connected user
+ * @param entityId - The user's ID (entityId used when creating the connection)
  */
-export async function getGoogleCalendarTools(connectedAccountId: string) {
+export async function getGoogleCalendarTools(entityId: string) {
   try {
-    const tools = await composio.tools.get({
-      actions: Object.values(GOOGLE_CALENDAR_ACTIONS),
-      connectedAccountId,
-    });
+    // Get all Google Calendar tools for this user using ToolListParams
+    const tools = await composio.tools.get(
+      entityId,
+      {
+        tools: Object.values(GOOGLE_CALENDAR_ACTIONS) as string[],
+      }
+    );
 
     logger.info('Retrieved Google Calendar tools', {
-      connectedAccountId,
-      toolCount: tools.length
+      entityId,
+      toolCount: Object.keys(tools).length
     });
 
     return tools;
   } catch (error) {
-    logger.error('Failed to get Google Calendar tools', error, { connectedAccountId });
+    logger.error('Failed to get Google Calendar tools', error, { entityId });
     throw error;
   }
 }
@@ -47,14 +51,14 @@ export async function getGoogleCalendarTools(connectedAccountId: string) {
  */
 export async function initiateGoogleCalendarConnection(
   userId: string,
-  redirectUrl: string
+  callbackUrl: string
 ) {
   try {
-    const connectionRequest = await composio.connectedAccounts.initiate({
-      integrationId: 'google-calendar',
-      redirectUrl,
-      entityId: userId,
-    });
+    const connectionRequest = await composio.connectedAccounts.link(
+      userId,
+      'googlecalendar',
+      { callbackUrl }
+    );
 
     logger.info('Initiated Google Calendar connection', {
       userId,
@@ -63,7 +67,7 @@ export async function initiateGoogleCalendarConnection(
 
     return {
       redirectUrl: connectionRequest.redirectUrl,
-      connectionId: connectionRequest.connectedAccountId,
+      connectionId: connectionRequest.id,
     };
   } catch (error) {
     logger.error('Failed to initiate Google Calendar connection', error, { userId });
@@ -76,13 +80,11 @@ export async function initiateGoogleCalendarConnection(
  */
 export async function getConnectionStatus(connectionId: string) {
   try {
-    const account = await composio.connectedAccounts.get({
-      connectedAccountId: connectionId
-    });
+    const account = await composio.connectedAccounts.get(connectionId);
 
     return {
       status: account.status,
-      integrationId: account.integrationId,
+      toolkitSlug: account.toolkit.slug,
       createdAt: account.createdAt,
     };
   } catch (error) {
@@ -97,7 +99,7 @@ export async function getConnectionStatus(connectionId: string) {
 export async function listUserConnections(userId: string) {
   try {
     const connections = await composio.connectedAccounts.list({
-      entityIds: [userId],
+      userIds: [userId],
     });
 
     logger.info('Listed user connections', {
@@ -118,9 +120,9 @@ export async function listUserConnections(userId: string) {
 export async function getActiveGoogleCalendarConnection(userId: string) {
   try {
     const connections = await composio.connectedAccounts.list({
-      entityIds: [userId],
-      integrationIds: ['google-calendar'],
-      status: 'ACTIVE',
+      userIds: [userId],
+      toolkitSlugs: ['googlecalendar'],
+      statuses: ['ACTIVE'],
     });
 
     const activeConnection = connections.items?.[0];
