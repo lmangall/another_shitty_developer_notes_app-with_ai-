@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { initiateGoogleCalendarConnection } from '@/lib/composio';
-import { logger, createLogger } from '@/lib/logger';
+import { createLogger } from '@/lib/logger';
+import { db } from '@/db';
+import { userIntegrations } from '@/db/schema';
+import { eq, and } from 'drizzle-orm';
 
 export async function POST() {
   const log = createLogger({ requestId: crypto.randomUUID() });
@@ -21,7 +24,39 @@ export async function POST() {
 
     const connection = await initiateGoogleCalendarConnection(session.user.id, redirectUrl);
 
-    log.info('Google Calendar connection initiated', {
+    // Store pending integration with connectionId so callback can look up userId
+    const existing = await db
+      .select()
+      .from(userIntegrations)
+      .where(
+        and(
+          eq(userIntegrations.userId, session.user.id),
+          eq(userIntegrations.provider, 'google-calendar')
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      // Update existing with new connectionId
+      await db
+        .update(userIntegrations)
+        .set({
+          connectedAccountId: connection.connectionId,
+          status: 'pending',
+          updatedAt: new Date(),
+        })
+        .where(eq(userIntegrations.id, existing[0].id));
+    } else {
+      // Create pending integration
+      await db.insert(userIntegrations).values({
+        userId: session.user.id,
+        provider: 'google-calendar',
+        connectedAccountId: connection.connectionId,
+        status: 'pending',
+      });
+    }
+
+    log.info('Google Calendar connection initiated and pending record saved', {
       userId: session.user.id,
       connectionId: connection.connectionId,
     });
