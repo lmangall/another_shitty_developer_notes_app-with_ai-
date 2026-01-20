@@ -110,11 +110,24 @@ export async function getConnectionDetails(connectionId: string) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const accountAny = account as any;
 
+    // Debug: log full account structure to find userId field
+    logger.info('Composio account raw data', {
+      connectionId,
+      accountKeys: Object.keys(account),
+      entityId: accountAny.entityId,
+      memberId: accountAny.member?.id,
+      memberEntityId: accountAny.member?.entityId,
+      userId: accountAny.userId,
+      status: account.status,
+    });
+
+    const userId = accountAny.entityId || accountAny.member?.id || accountAny.member?.entityId || accountAny.userId || null;
+
     return {
       status: account.status,
       toolkitSlug: account.toolkit?.slug,
       createdAt: account.createdAt,
-      userId: accountAny.entityId || accountAny.member?.id || null,
+      userId,
     };
   } catch (error) {
     logger.error('Failed to get connection details', error, { connectionId });

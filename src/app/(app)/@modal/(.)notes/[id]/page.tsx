@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect, use, useRef } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit2, Trash2, Save, X, Bold, Italic, List, Code, Hash, Eye, EyeOff } from 'lucide-react';
+import { Edit2, Trash2, Save, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Sheet,
   SheetContent,
@@ -15,6 +14,7 @@ import {
   SheetTitle,
   SheetFooter,
 } from '@/components/ui/sheet';
+import { MarkdownEditor } from '@/components/notes/markdown-editor';
 import { format } from 'date-fns';
 
 interface Note {
@@ -36,42 +36,7 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [open, setOpen] = useState(true);
-  const [showPreview, setShowPreview] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const insertFormat = (prefix: string, suffix: string = prefix) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = content.substring(start, end);
-
-    const newText = content.substring(0, start) + prefix + selected + suffix + content.substring(end);
-    setContent(newText);
-
-    setTimeout(() => {
-      textarea.focus();
-      const newPos = selected ? start + prefix.length + selected.length + suffix.length : start + prefix.length;
-      textarea.setSelectionRange(newPos, newPos);
-    }, 0);
-  };
-
-  const insertAtLineStart = (prefix: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const lineStart = content.lastIndexOf('\n', start - 1) + 1;
-
-    const newText = content.substring(0, lineStart) + prefix + content.substring(lineStart);
-    setContent(newText);
-
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, start + prefix.length);
-    }, 0);
-  };
+  const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('edit');
 
   useEffect(() => {
     fetchNote();
@@ -164,92 +129,14 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
 
             <div className="mt-6 flex-1">
               {editing ? (
-                <div className="border rounded-lg overflow-hidden">
-                  {/* Formatting Toolbar */}
-                  <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30">
-                    {!showPreview && (
-                      <>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={() => insertFormat('**')}
-                          title="Bold"
-                        >
-                          <Bold size={16} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={() => insertFormat('*')}
-                          title="Italic"
-                        >
-                          <Italic size={16} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={() => insertAtLineStart('- ')}
-                          title="List item"
-                        >
-                          <List size={16} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={() => insertFormat('`')}
-                          title="Inline code"
-                        >
-                          <Code size={16} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                          onClick={() => insertAtLineStart('## ')}
-                          title="Heading"
-                        >
-                          <Hash size={16} />
-                        </Button>
-                      </>
-                    )}
-                    <span className="ml-auto text-xs text-muted-foreground mr-2">
-                      {showPreview ? 'Preview' : 'Markdown'}
-                    </span>
-                    <Button
-                      type="button"
-                      variant={showPreview ? 'secondary' : 'ghost'}
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => setShowPreview(!showPreview)}
-                      title={showPreview ? 'Edit' : 'Preview'}
-                    >
-                      {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </Button>
-                  </div>
-                  {showPreview ? (
-                    <div className="prose prose-sm max-w-none dark:prose-invert p-3 min-h-[300px]">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-                    </div>
-                  ) : (
-                    <Textarea
-                      ref={textareaRef}
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      rows={15}
-                      placeholder="Write your note... (Markdown supported)"
-                      className="min-h-[300px] border-0 rounded-none focus-visible:ring-0"
-                    />
-                  )}
-                </div>
+                <MarkdownEditor
+                  value={content}
+                  onChange={setContent}
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                  onSave={handleSave}
+                  minRows={12}
+                />
               ) : (
                 <div className="prose prose-sm max-w-none dark:prose-invert">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
