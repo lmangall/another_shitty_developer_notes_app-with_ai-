@@ -8,7 +8,7 @@ import { getGoogleCalendarTools } from './composio';
 import { logger } from './logger';
 
 // Use Vercel AI Gateway with claude
-const model = gateway('anthropic/claude-sonnet-4.5');
+export const model = gateway('anthropic/claude-sonnet-4.5');
 
 // User context for AI
 export interface UserContext {
@@ -162,7 +162,7 @@ export interface AgentResponse {
 }
 
 // Create tools with execute functions for AI SDK v6
-function createTools(userId: string, userTags: { id: string; name: string }[]) {
+export function createTools(userId: string, userTags: { id: string; name: string }[]) {
   return {
     createNote: {
       description: 'Create a new note with a title and content. Use this when the user wants to save information, write something down, or create a new note. When creating a note, suggest 1-3 relevant tags from the user\'s available tags.',
@@ -412,12 +412,11 @@ function createTools(userId: string, userTags: { id: string; name: string }[]) {
   };
 }
 
-export async function processWithAgent(
-  userId: string,
-  input: string,
+export function buildSystemPrompt(
   context: UserContext,
-  userTimezone?: string
-): Promise<AgentResponse> {
+  userTimezone?: string,
+  hasCalendarTools: boolean = false
+): string {
   const now = new Date();
   const timezone = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const timezoneOffset = now.getTimezoneOffset();
@@ -438,31 +437,6 @@ export async function processWithAgent(
   });
 
   const contextStr = formatContextForPrompt(context);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let tools: Record<string, any> = createTools(userId, context.tags);
-
-  // Check for Google Calendar integration and add calendar tools
-  const hasCalendarIntegration = context.integrations?.some((i) => i.provider === 'google-calendar');
-  let hasCalendarTools = false;
-
-  if (hasCalendarIntegration) {
-    try {
-      logger.debug('Fetching Google Calendar tools', { userId });
-      // Pass userId as entityId - this is how we identified the user when creating the connection
-      const calendarTools = await getGoogleCalendarTools(userId);
-      if (calendarTools && Object.keys(calendarTools).length > 0) {
-        tools = { ...tools, ...calendarTools };
-        hasCalendarTools = true;
-        logger.info('Added Google Calendar tools to agent', {
-          userId,
-          toolCount: Object.keys(calendarTools).length,
-        });
-      }
-    } catch (error) {
-      logger.error('Failed to load Google Calendar tools', error, { userId });
-      // Continue without calendar tools
-    }
-  }
 
   let systemPrompt = `You are a helpful assistant that manages notes and reminders for the user.
 You have access to tools to create, edit, and delete notes, as well as create and cancel reminders.`;
@@ -498,6 +472,41 @@ ${contextStr}
 Based on the user's request, decide which tool(s) to use. If the user's request doesn't match any of your tools (like asking a general question), just respond conversationally without using tools.
 
 Always be helpful and confirm what action you took.`;
+
+  return systemPrompt;
+}
+
+export async function processWithAgent(
+  userId: string,
+  input: string,
+  context: UserContext,
+  userTimezone?: string
+): Promise<AgentResponse> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let tools: Record<string, any> = createTools(userId, context.tags);
+
+  // Check for Google Calendar integration and add calendar tools
+  const hasCalendarIntegration = context.integrations?.some((i) => i.provider === 'google-calendar');
+  let hasCalendarTools = false;
+
+  if (hasCalendarIntegration) {
+    try {
+      logger.debug('Fetching Google Calendar tools', { userId });
+      const calendarTools = await getGoogleCalendarTools(userId);
+      if (calendarTools && Object.keys(calendarTools).length > 0) {
+        tools = { ...tools, ...calendarTools };
+        hasCalendarTools = true;
+        logger.info('Added Google Calendar tools to agent', {
+          userId,
+          toolCount: Object.keys(calendarTools).length,
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to load Google Calendar tools', error, { userId });
+    }
+  }
+
+  const systemPrompt = buildSystemPrompt(context, userTimezone, hasCalendarTools);
 
   const result = await generateText({
     model,
