@@ -8,13 +8,14 @@ const composio = new Composio({
   provider: new VercelProvider(),
 });
 
-// Google Calendar action names
+// Google Calendar action names (from https://docs.composio.dev/toolkits/googlecalendar)
 export const GOOGLE_CALENDAR_ACTIONS = {
   CREATE_EVENT: 'GOOGLECALENDAR_CREATE_EVENT',
-  LIST_EVENTS: 'GOOGLECALENDAR_LIST_EVENTS',
+  LIST_EVENTS: 'GOOGLECALENDAR_EVENTS_LIST',
   UPDATE_EVENT: 'GOOGLECALENDAR_UPDATE_EVENT',
   DELETE_EVENT: 'GOOGLECALENDAR_DELETE_EVENT',
-  GET_EVENT: 'GOOGLECALENDAR_GET_EVENT',
+  GET_EVENT: 'GOOGLECALENDAR_EVENTS_GET',
+  FIND_EVENT: 'GOOGLECALENDAR_FIND_EVENT',
 } as const;
 
 export type GoogleCalendarAction = (typeof GOOGLE_CALENDAR_ACTIONS)[keyof typeof GOOGLE_CALENDAR_ACTIONS];

@@ -460,13 +460,14 @@ IMPORTANT for notes: When creating a note, analyze the content and suggest 1-3 r
     systemPrompt += `
 
 GOOGLE CALENDAR TOOLS: You have access to the following calendar tools:
-- GOOGLECALENDAR_LIST_EVENTS: List/view calendar events in a date range. Use this when users ask to see their calendar, what events they have, or what's scheduled.
+- GOOGLECALENDAR_EVENTS_LIST: List/view calendar events in a date range. Use this when users ask to see their calendar, what events they have, or what's scheduled.
 - GOOGLECALENDAR_CREATE_EVENT: Create new calendar events with summary, start/end times, description, location.
-- GOOGLECALENDAR_GET_EVENT: Get details of a specific event by ID.
+- GOOGLECALENDAR_EVENTS_GET: Get details of a specific event by ID.
 - GOOGLECALENDAR_UPDATE_EVENT: Modify an existing event by ID.
 - GOOGLECALENDAR_DELETE_EVENT: Delete an event by ID.
+- GOOGLECALENDAR_FIND_EVENT: Search for events using text query and time ranges.
 
-When users ask about their schedule, what they have today/tomorrow, or to list their events, use GOOGLECALENDAR_LIST_EVENTS.
+When users ask about their schedule, what they have today/tomorrow, or to list their events, use GOOGLECALENDAR_EVENTS_LIST.
 When creating events, include: summary/title, start and end times in ISO format with timezone, and optionally description, location, attendees.`;
   }
 
