@@ -12,26 +12,37 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 
-interface ActionResult {
+interface ToolResult {
+  success: boolean;
+  action: string;
+  message?: string;
+  error?: string;
+  data?: Record<string, unknown>;
+}
+
+interface AIProcessResponse {
+  message?: string;
+  toolResults?: ToolResult[];
+  error?: string;
+}
+
+// Normalized result for UI display
+interface DisplayResult {
   intent: string;
-  result: {
-    success: boolean;
-    action: string;
-    message?: string;
-    error?: string;
-    data?: Record<string, unknown>;
-  };
+  success: boolean;
+  message: string;
 }
 
 export function QuickCreateFAB() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [processing, setProcessing] = useState(false);
-  const [result, setResult] = useState<ActionResult | null>(null);
+  const [result, setResult] = useState<DisplayResult | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isSubmittingRef = useRef(false); // Sync ref to prevent double submissions
 
   useEffect(() => {
     if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
@@ -93,8 +104,9 @@ export function QuickCreateFAB() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || processing) return;
+    if (!input.trim() || isSubmittingRef.current) return;
 
+    isSubmittingRef.current = true; // Set immediately (sync)
     setProcessing(true);
     setResult(null);
     const currentInput = input;
@@ -106,10 +118,37 @@ export function QuickCreateFAB() {
         body: JSON.stringify({ input: currentInput }),
       });
 
-      const actionResult: ActionResult = await res.json();
-      setResult(actionResult);
+      // Handle HTTP errors before parsing JSON
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        let errorMessage = 'Failed to process input';
+        if (res.status === 401) errorMessage = 'Please sign in to continue';
+        else if (res.status === 429) errorMessage = 'Too many requests. Please wait a moment.';
+        else if (errorData.error) errorMessage = errorData.error;
 
-      if (actionResult.result.success) {
+        setResult({
+          intent: 'error',
+          success: false,
+          message: errorMessage,
+        });
+        return;
+      }
+
+      const data: AIProcessResponse = await res.json();
+
+      // Derive success from toolResults
+      const firstResult = data.toolResults?.[0];
+      const success = firstResult?.success ?? false;
+      const intent = firstResult?.action ?? 'response';
+      const displayMessage = firstResult?.message ?? data.message ?? 'Done';
+
+      setResult({
+        intent,
+        success,
+        message: firstResult?.error ?? displayMessage,
+      });
+
+      if (success) {
         setInput('');
         // Close dialog after a brief delay on success
         setTimeout(() => {
@@ -119,14 +158,12 @@ export function QuickCreateFAB() {
       }
     } catch {
       setResult({
-        intent: 'unknown',
-        result: {
-          success: false,
-          action: 'process',
-          error: 'Failed to process input',
-        },
+        intent: 'error',
+        success: false,
+        message: 'Network error. Please try again.',
       });
     } finally {
+      isSubmittingRef.current = false; // Reset ref
       setProcessing(false);
     }
   };
@@ -208,7 +245,7 @@ export function QuickCreateFAB() {
 
             {result && (
               <div className="flex items-start gap-3 p-3 rounded-md bg-muted">
-                {result.result.success ? (
+                {result.success ? (
                   <CheckCircle className="text-green-500 flex-shrink-0" size={20} />
                 ) : (
                   <XCircle className="text-red-500 flex-shrink-0" size={20} />
@@ -216,7 +253,7 @@ export function QuickCreateFAB() {
                 <div>
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full ${
-                      result.result.success
+                      result.success
                         ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                         : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                     }`}
@@ -224,7 +261,7 @@ export function QuickCreateFAB() {
                     {result.intent}
                   </span>
                   <p className="text-sm text-foreground mt-1">
-                    {result.result.message || result.result.error}
+                    {result.message}
                   </p>
                 </div>
               </div>
