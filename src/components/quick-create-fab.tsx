@@ -307,7 +307,7 @@ export function QuickCreateFAB() {
 
       {/* Dialog */}
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col p-0">
+        <DialogContent className="sm:max-w-lg max-h-[80vh] flex! flex-col! overflow-hidden p-0">
           <DialogHeader className="px-4 py-3 border-b">
             <div className="flex items-center justify-between">
               <DialogTitle className="text-lg">AI Assistant</DialogTitle>
@@ -372,7 +372,7 @@ export function QuickCreateFAB() {
           </DialogHeader>
 
           {/* Messages area */}
-          <ScrollArea className="flex-1 px-4" ref={scrollRef}>
+          <ScrollArea className="flex-1 min-h-0 px-4" ref={scrollRef}>
             <div className="py-4 space-y-4">
               {messages.length === 0 && !streamingContent && (
                 <div className="text-center text-muted-foreground py-8">
