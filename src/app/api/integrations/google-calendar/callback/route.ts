@@ -3,8 +3,8 @@ import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { db } from '@/db';
 import { userIntegrations } from '@/db/schema';
-import { getConnectionStatus } from '@/lib/composio';
-import { logger, createLogger } from '@/lib/logger';
+import { getConnectionStatus, waitForConnection } from '@/lib/composio';
+import { createLogger } from '@/lib/logger';
 import { eq, and } from 'drizzle-orm';
 
 export async function GET(request: Request) {
@@ -32,18 +32,33 @@ export async function GET(request: Request) {
       connectionId,
     });
 
-    // Verify connection status with Composio
-    const status = await getConnectionStatus(connectionId);
+    // Check current status first
+    const currentStatus = await getConnectionStatus(connectionId);
 
-    if (status.status !== 'ACTIVE') {
-      log.warn('Connection not active', {
+    // If not already active, wait for connection to complete
+    if (currentStatus.status !== 'ACTIVE') {
+      log.info('Connection not yet active, waiting...', {
         userId: session.user.id,
         connectionId,
-        status: status.status,
+        currentStatus: currentStatus.status,
       });
-      return NextResponse.redirect(
-        new URL(`/integrations?error=connection_${status.status.toLowerCase()}`, request.url)
-      );
+
+      try {
+        await waitForConnection(connectionId, 30000);
+      } catch {
+        // Check final status after timeout
+        const finalStatus = await getConnectionStatus(connectionId);
+        if (finalStatus.status !== 'ACTIVE') {
+          log.warn('Connection failed to become active', {
+            userId: session.user.id,
+            connectionId,
+            finalStatus: finalStatus.status,
+          });
+          return NextResponse.redirect(
+            new URL(`/integrations?error=connection_timeout`, request.url)
+          );
+        }
+      }
     }
 
     // Check if integration already exists

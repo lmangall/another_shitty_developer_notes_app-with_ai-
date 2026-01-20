@@ -120,6 +120,29 @@ export async function getConnectionStatus(connectionId: string) {
 }
 
 /**
+ * Wait for a connection to complete (become ACTIVE)
+ *
+ * @param connectedAccountId - The ID of the connected account
+ * @param timeout - Maximum time to wait in milliseconds (default: 30000)
+ */
+export async function waitForConnection(connectedAccountId: string, timeout = 30000) {
+  try {
+    const account = await composio.connectedAccounts.waitForConnection(connectedAccountId, timeout);
+
+    logger.info('Connection completed', {
+      connectedAccountId,
+      status: account.status,
+      toolkit: account.toolkit?.slug,
+    });
+
+    return account;
+  } catch (error) {
+    logger.error('Failed to wait for connection', error, { connectedAccountId });
+    throw error;
+  }
+}
+
+/**
  * List all connected accounts for a user
  */
 export async function listUserConnections(userId: string) {
