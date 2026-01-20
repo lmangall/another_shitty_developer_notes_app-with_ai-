@@ -156,7 +156,6 @@ export async function POST(request: Request) {
     });
 
     // Return streaming response with conversation ID in headers
-    // Use toUIMessageStreamResponse to include tool invocation states
     const response = result.toUIMessageStreamResponse();
 
     // Add conversation ID to response headers

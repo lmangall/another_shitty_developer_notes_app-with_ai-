@@ -163,7 +163,7 @@ export function QuickCreateFAB() {
     if (!content || content === '[DONE]') return null;
 
     // Try Data Stream Protocol format first: "TYPE_CODE:VALUE"
-    // Type codes: 0=text, 9=tool-call, a=tool-result, e=finish, 3=error
+    // Type codes: 0=text, 7=tool-call-start, 9=tool-call, a=tool-result, e=finish, 3=error
     const match = content.match(/^([0-9a-f]):([\s\S]*)$/);
     if (match) {
       const [, typeCode, valueStr] = match;
@@ -174,8 +174,18 @@ export function QuickCreateFAB() {
             const text = JSON.parse(valueStr);
             return { type: 'text-delta', delta: String(text) };
           }
+          case '7': {
+            // Tool call streaming start - shows tool name before args are ready
+            const data = JSON.parse(valueStr);
+            return {
+              type: 'tool-call',
+              toolCallId: data.toolCallId,
+              toolName: data.toolName,
+              args: {},
+            };
+          }
           case '9': {
-            // Tool call starting
+            // Tool call complete with args
             const data = JSON.parse(valueStr);
             return {
               type: 'tool-call',
@@ -213,9 +223,15 @@ export function QuickCreateFAB() {
     try {
       const data = JSON.parse(content);
       if (data && typeof data.type === 'string') {
+        // Log all recognized JSON events for debugging
+        if (data.type.includes('tool')) {
+          console.log('[Tool event detected]:', data.type, data);
+        }
         switch (data.type) {
           case 'text-delta':
             return { type: 'text-delta', delta: String(data.textDelta || data.delta || '') };
+          // Tool events - AI SDK UI Message Stream format
+          case 'tool-input-start':
           case 'tool-call':
             return {
               type: 'tool-call',
@@ -223,16 +239,29 @@ export function QuickCreateFAB() {
               toolName: data.toolName,
               args: data.args || {},
             };
+          case 'tool-input-available':
+            // Tool input is complete - could update args here
+            return {
+              type: 'tool-call',
+              toolCallId: data.toolCallId,
+              toolName: data.toolName,
+              args: data.input || data.args || {},
+            };
+          case 'tool-output-available':
           case 'tool-result':
             return {
               type: 'tool-result',
               toolCallId: data.toolCallId,
-              result: data.result,
+              result: data.output || data.result,
             };
           case 'finish':
+          case 'finish-step':
             return { type: 'finish', finishReason: data.finishReason || 'stop' };
           case 'error':
             return { type: 'error', error: String(data.error || data.message || '') };
+          default:
+            // Log unhandled event types for debugging
+            console.log('[Unhandled event type]:', data.type, data);
         }
       }
     } catch {
