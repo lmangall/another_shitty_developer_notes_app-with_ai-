@@ -140,6 +140,7 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
                 editable={editing}
                 showToolbar={editing}
                 minRows={12}
+                onClickToEdit={() => setEditing(true)}
               />
             </div>
 

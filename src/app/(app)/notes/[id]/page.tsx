@@ -160,6 +160,7 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
             editable={editing}
             showToolbar={editing}
             autoFocus={editing}
+            onClickToEdit={() => setEditing(true)}
           />
         </CardContent>
 

@@ -37,6 +37,7 @@ interface TiptapEditorProps {
   showToolbar?: boolean;
   autoFocus?: boolean;
   editable?: boolean;
+  onClickToEdit?: () => void;
 }
 
 interface ToolbarButtonProps {
@@ -215,6 +216,7 @@ export function TiptapEditor({
   showToolbar = true,
   autoFocus = false,
   editable = true,
+  onClickToEdit,
 }: TiptapEditorProps) {
   const [isRawMode, setIsRawMode] = useState(false);
   const [rawContent, setRawContent] = useState(value);
@@ -358,7 +360,13 @@ export function TiptapEditor({
           className="min-h-[300px] border-0 rounded-none focus-visible:ring-0 resize-none font-mono"
         />
       ) : (
-        <EditorContent editor={editor} />
+        <div
+          onClick={!editable && onClickToEdit ? onClickToEdit : undefined}
+          className={cn(!editable && onClickToEdit && 'cursor-text')}
+          title={!editable && onClickToEdit ? 'Click to edit' : undefined}
+        >
+          <EditorContent editor={editor} />
+        </div>
       )}
     </div>
   );
