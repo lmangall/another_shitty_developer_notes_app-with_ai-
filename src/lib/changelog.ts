@@ -9,6 +9,21 @@ export const changelog: ChangelogEntry[] = [
   {
     date: '2025-01-21',
     type: 'feat',
+    message: 'Transform notes into todos with AI-powered extraction',
+  },
+  {
+    date: '2025-01-21',
+    type: 'refactor',
+    message: 'Note actions consolidated into dropdown menu',
+  },
+  {
+    date: '2025-01-21',
+    type: 'feat',
+    message: 'AI agent can create, update, complete, and delete todos',
+  },
+  {
+    date: '2025-01-21',
+    type: 'feat',
     message: 'Eisenhower Matrix for todos with drag positioning',
   },
   {

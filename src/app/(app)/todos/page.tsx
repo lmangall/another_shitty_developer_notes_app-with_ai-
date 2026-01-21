@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckSquare } from 'lucide-react';
 import {
   getTodos,
@@ -17,6 +18,9 @@ import { DoneSection } from '@/components/todos/done-section';
 import { useToastActions } from '@/components/ui/toast';
 
 export default function TodosPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const highlightId = searchParams.get('highlight');
   const [todos, setTodos] = useState<{ pending: TodoItem[]; completed: TodoItem[] }>({
     pending: [],
     completed: [],
@@ -42,6 +46,16 @@ export default function TodosPage() {
   useEffect(() => {
     fetchTodos();
   }, []);
+
+  // Clear highlight param after animation
+  useEffect(() => {
+    if (highlightId) {
+      const timer = setTimeout(() => {
+        router.replace('/todos', { scroll: false });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightId, router]);
 
   async function handleCreate(title: string) {
     setCreating(true);
@@ -162,6 +176,7 @@ export default function TodosPage() {
             onComplete={handleComplete}
             onDelete={handleDelete}
             onPositionChange={handlePositionChange}
+            highlightedId={highlightId}
           />
 
           {/* Done Section */}

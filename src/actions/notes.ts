@@ -3,13 +3,15 @@
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { db } from '@/db';
-import { notes, tags, noteTags } from '@/db/schema';
+import { notes, tags, noteTags, todos } from '@/db/schema';
 import { eq, desc, asc, ilike, or, and, sql, inArray, gte, lte, isNull, isNotNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
+import { generateObject } from 'ai';
+import { model } from '@/lib/ai';
 import { ActionResult, PaginatedResult, success, error } from './types';
-import type { Note } from '@/db/schema';
+import type { Note, Todo } from '@/db/schema';
 import type { NoteSortOption, SortOrder } from '@/lib/constants';
 
 // ============ Types ============
@@ -485,5 +487,95 @@ export async function permanentlyDeleteNote(id: string): Promise<ActionResult<vo
   } catch (err) {
     logger.error('Failed to permanently delete note', err as Error, { userId: session.user.id, noteId: id });
     return error('Failed to permanently delete note', 'INTERNAL');
+  }
+}
+
+// ============ Transform Note to Todo ============
+
+const todoExtractionSchema = z.object({
+  title: z.string().describe('A short, actionable task title extracted from the note'),
+  description: z.string().nullable().describe('Optional longer description extracted from the note content'),
+  priority: z.enum(['do_first', 'schedule', 'delegate', 'eliminate']).describe('Priority based on urgency and importance: "do_first" (urgent & important), "schedule" (important, not urgent), "delegate" (urgent, not important), "eliminate" (not urgent, not important)'),
+  dueDate: z.string().nullable().describe('ISO datetime string if a deadline is mentioned in the note, otherwise null'),
+});
+
+function priorityToPosition(priority: string): { x: number; y: number } {
+  switch (priority) {
+    case 'do_first':
+      return { x: 15, y: 15 };
+    case 'schedule':
+      return { x: 85, y: 15 };
+    case 'delegate':
+      return { x: 15, y: 85 };
+    case 'eliminate':
+      return { x: 85, y: 85 };
+    default:
+      return { x: 15, y: 15 };
+  }
+}
+
+export async function transformNoteToTodo(noteId: string): Promise<ActionResult<Todo>> {
+  const session = await getSession();
+  if (!session?.user) {
+    return error('Unauthorized', 'UNAUTHORIZED');
+  }
+
+  const validation = z.string().uuid('Invalid note ID').safeParse(noteId);
+  if (!validation.success) {
+    return error(validation.error.issues[0].message, 'VALIDATION');
+  }
+
+  try {
+    // Fetch the note
+    const [note] = await db
+      .select()
+      .from(notes)
+      .where(and(eq(notes.id, noteId), eq(notes.userId, session.user.id), isNull(notes.deletedAt)));
+
+    if (!note) {
+      return error('Note not found', 'NOT_FOUND');
+    }
+
+    // Use AI to extract todo data from the note
+    const { object: todoData } = await generateObject({
+      model,
+      schema: todoExtractionSchema,
+      prompt: `Extract a todo/task from this note. Analyze the content to determine:
+1. A concise, actionable task title
+2. Any additional description/context
+3. Priority based on urgency and importance mentioned
+4. Any due date if mentioned
+
+Note title: ${note.title}
+Note content: ${note.content}`,
+    });
+
+    // Convert priority to position
+    const position = priorityToPosition(todoData.priority);
+
+    // Create the todo
+    const [todo] = await db
+      .insert(todos)
+      .values({
+        userId: session.user.id,
+        title: todoData.title,
+        description: todoData.description,
+        positionX: position.x,
+        positionY: position.y,
+        dueDate: todoData.dueDate ? new Date(todoData.dueDate) : null,
+      })
+      .returning();
+
+    logger.info('Note transformed to todo', {
+      userId: session.user.id,
+      noteId: note.id,
+      todoId: todo.id,
+    });
+    revalidatePath('/todos');
+
+    return success(todo);
+  } catch (err) {
+    logger.error('Failed to transform note to todo', err as Error, { userId: session.user.id, noteId });
+    return error('Failed to transform note to todo', 'INTERNAL');
   }
 }

@@ -11,6 +11,7 @@ interface EisenhowerMatrixProps {
   onComplete: (id: string) => void;
   onDelete: (id: string) => void;
   onPositionChange: (id: string, x: number, y: number) => void;
+  highlightedId?: string | null;
 }
 
 interface DraggingState {
@@ -26,6 +27,7 @@ export function EisenhowerMatrix({
   onComplete,
   onDelete,
   onPositionChange,
+  highlightedId,
 }: EisenhowerMatrixProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const doneZoneRef = useRef<HTMLDivElement>(null);
@@ -176,6 +178,7 @@ export function EisenhowerMatrix({
         {/* Todo cards */}
         {todos.map((todo) => {
           const isDraggingThis = dragging?.id === todo.id;
+          const isHighlighted = highlightedId === todo.id;
           const x = isDraggingThis && tempPosition ? tempPosition.x : todo.positionX;
           const y = isDraggingThis && tempPosition ? tempPosition.y : todo.positionY;
 
@@ -191,8 +194,10 @@ export function EisenhowerMatrix({
             <div
               key={todo.id}
               className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing transition-shadow group ${
-                isDraggingThis ? 'z-50 shadow-xl scale-105' : 'z-10 hover:z-20'
-              } ${isDraggingThis && isOverDoneZone ? 'opacity-50' : ''}`}
+                isDraggingThis ? 'z-50 shadow-xl scale-105' : isHighlighted ? 'z-40' : 'z-10 hover:z-20'
+              } ${isDraggingThis && isOverDoneZone ? 'opacity-50' : ''} ${
+                isHighlighted ? 'animate-pulse' : ''
+              }`}
               style={{
                 left: `${x}%`,
                 top: `${y}%`,
@@ -202,7 +207,7 @@ export function EisenhowerMatrix({
               <div
                 className={`bg-card border-2 ${cardBorderColor} rounded-lg p-2.5 shadow-md hover:shadow-lg transition-all min-w-[130px] max-w-[200px] ${
                   isDraggingThis ? 'ring-2 ring-primary' : ''
-                }`}
+                } ${isHighlighted ? 'ring-2 ring-primary ring-offset-2 shadow-lg' : ''}`}
               >
                 <div className="flex items-start gap-2">
                   <Checkbox

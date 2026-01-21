@@ -1,14 +1,25 @@
 'use client';
 
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Trash2, Pin } from 'lucide-react';
+import { MoreVertical, Trash2, Pin, Tag, CheckSquare, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { TagBadge } from '@/components/tag-badge';
 import { TagPicker } from '@/components/tag-picker';
 import { ResizeHandle } from './resize-handle';
+import { useToastActions } from '@/components/ui/toast';
+import { transformNoteToTodo } from '@/actions/notes';
 import { format } from 'date-fns';
 import type { NoteWithTags } from '@/actions/notes';
 
@@ -37,8 +48,29 @@ interface NoteCardProps {
 }
 
 export function NoteCard({ note, onDelete, onTagsChange, onResize, onPinToggle, disableGridStyles }: NoteCardProps) {
+  const router = useRouter();
+  const toast = useToastActions();
+  const [tagPickerOpen, setTagPickerOpen] = useState(false);
+  const [isTransforming, setIsTransforming] = useState(false);
   const colSpan = note.cardColSpan || 1;
   const rowSpan = note.cardRowSpan || 1;
+
+  async function handleTransformToTodo() {
+    setIsTransforming(true);
+    try {
+      const result = await transformNoteToTodo(note.id);
+      if (result.success) {
+        toast.success('Note transformed into todo');
+        router.push(`/todos?highlight=${result.data.id}`);
+      } else {
+        toast.error(result.error || 'Failed to transform note');
+      }
+    } catch {
+      toast.error('Failed to transform note');
+    } finally {
+      setIsTransforming(false);
+    }
+  }
 
   // Dynamic line clamp based on row span (roughly 7 lines per row unit)
   const lineClampValue = rowSpan * 7;
@@ -88,36 +120,73 @@ export function NoteCard({ note, onDelete, onTagsChange, onResize, onPinToggle, 
         </CardContent>
       </Link>
 
-      {/* Action buttons */}
-      <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.preventDefault();
-            onPinToggle(note.id, !note.isPinned);
-          }}
-          className={`h-7 w-7 p-0 ${note.isPinned ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`}
-          title={note.isPinned ? 'Unpin note' : 'Pin note'}
-        >
-          <Pin size={16} />
-        </Button>
+      {/* Action menu */}
+      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+              onClick={(e) => e.preventDefault()}
+            >
+              <MoreVertical size={16} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.preventDefault();
+                onPinToggle(note.id, !note.isPinned);
+              }}
+            >
+              <Pin size={16} className={note.isPinned ? 'text-primary' : ''} />
+              {note.isPinned ? 'Unpin' : 'Pin'}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.preventDefault();
+                setTagPickerOpen(true);
+              }}
+            >
+              <Tag size={16} />
+              Manage tags
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.preventDefault();
+                handleTransformToTodo();
+              }}
+              disabled={isTransforming}
+            >
+              {isTransforming ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <CheckSquare size={16} />
+              )}
+              {isTransforming ? 'Transforming...' : 'Transform to todo'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={(e) => {
+                e.preventDefault();
+                onDelete(note);
+              }}
+            >
+              <Trash2 size={16} />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <TagPicker
           noteId={note.id}
           currentTags={note.tags || []}
           onTagsChange={onTagsChange}
+          open={tagPickerOpen}
+          onOpenChange={setTagPickerOpen}
+          showTrigger={false}
         />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.preventDefault();
-            onDelete(note);
-          }}
-          className="text-muted-foreground hover:text-destructive h-7 w-7 p-0"
-        >
-          <Trash2 size={16} />
-        </Button>
       </div>
 
       {/* Resize handle */}

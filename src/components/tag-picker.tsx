@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { Plus, Tag, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,12 +12,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-
-interface Tag {
-  id: string;
-  name: string;
-  color: string;
-}
+import { getTags, createTag, addTagToNote, removeTagFromNote } from '@/actions/tags';
+import type { Tag as TagType } from '@/db/schema';
 
 const TAG_COLORS = [
   '#ef4444', // red
@@ -33,16 +29,22 @@ const TAG_COLORS = [
 
 interface TagPickerProps {
   noteId: string;
-  currentTags: Tag[];
+  currentTags: { id: string; name: string; color: string }[];
   onTagsChange: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showTrigger?: boolean;
 }
 
-export function TagPicker({ noteId, currentTags, onTagsChange }: TagPickerProps) {
-  const [allTags, setAllTags] = useState<Tag[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
+export function TagPicker({ noteId, currentTags, onTagsChange, open, onOpenChange, showTrigger = true }: TagPickerProps) {
+  const [allTags, setAllTags] = useState<TagType[]>([]);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isOpen = open ?? internalOpen;
+  const setIsOpen = onOpenChange ?? setInternalOpen;
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
-  const [isCreating, setIsCreating] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -53,66 +55,43 @@ export function TagPicker({ noteId, currentTags, onTagsChange }: TagPickerProps)
 
   async function fetchTags() {
     setIsLoading(true);
-    try {
-      const res = await fetch('/api/tags');
-      const data = await res.json();
-      setAllTags(data.tags || []);
-    } catch (error) {
-      console.error('Failed to fetch tags:', error);
-    } finally {
-      setIsLoading(false);
+    const result = await getTags();
+    if (result.success) {
+      setAllTags(result.data);
     }
+    setIsLoading(false);
   }
 
-  async function createTag() {
-    if (!newTagName.trim() || isCreating) return;
+  function handleCreateTag() {
+    if (!newTagName.trim() || isPending) return;
 
-    setIsCreating(true);
-    try {
-      const res = await fetch('/api/tags', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newTagName.trim(), color: newTagColor }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setAllTags([...allTags, data.tag]);
+    startTransition(async () => {
+      const result = await createTag({ name: newTagName.trim(), color: newTagColor });
+      if (result.success) {
+        setAllTags([...allTags, result.data]);
         setNewTagName('');
         // Auto-add the new tag to the note
-        await addTagToNote(data.tag.id);
+        await handleAddTagToNote(result.data.id);
       }
-    } catch (error) {
-      console.error('Failed to create tag:', error);
-    } finally {
-      setIsCreating(false);
-    }
+    });
   }
 
-  async function addTagToNote(tagId: string) {
-    try {
-      await fetch(`/api/notes/${noteId}/tags`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagId }),
-      });
-      onTagsChange();
-    } catch (error) {
-      console.error('Failed to add tag:', error);
-    }
+  async function handleAddTagToNote(tagId: string) {
+    startTransition(async () => {
+      const result = await addTagToNote({ noteId, tagId });
+      if (result.success) {
+        onTagsChange();
+      }
+    });
   }
 
-  async function removeTagFromNote(tagId: string) {
-    try {
-      await fetch(`/api/notes/${noteId}/tags`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tagId }),
-      });
-      onTagsChange();
-    } catch (error) {
-      console.error('Failed to remove tag:', error);
-    }
+  async function handleRemoveTagFromNote(tagId: string) {
+    startTransition(async () => {
+      const result = await removeTagFromNote({ noteId, tagId });
+      if (result.success) {
+        onTagsChange();
+      }
+    });
   }
 
   const currentTagIds = new Set(currentTags.map(t => t.id));
@@ -120,12 +99,14 @@ export function TagPicker({ noteId, currentTags, onTagsChange }: TagPickerProps)
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1 h-7 px-2">
-          <Tag size={14} />
-          <Plus size={12} />
-        </Button>
-      </DialogTrigger>
+      {showTrigger && (
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="sm" className="gap-1 h-7 px-2">
+            <Tag size={14} />
+            <Plus size={12} />
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Manage Tags</DialogTitle>
@@ -142,7 +123,7 @@ export function TagPicker({ noteId, currentTags, onTagsChange }: TagPickerProps)
                     key={tag.id}
                     name={tag.name}
                     color={tag.color}
-                    onRemove={() => removeTagFromNote(tag.id)}
+                    onRemove={() => handleRemoveTagFromNote(tag.id)}
                   />
                 ))}
               </div>
@@ -161,8 +142,9 @@ export function TagPicker({ noteId, currentTags, onTagsChange }: TagPickerProps)
                 {availableTags.map(tag => (
                   <button
                     key={tag.id}
-                    onClick={() => addTagToNote(tag.id)}
+                    onClick={() => handleAddTagToNote(tag.id)}
                     className="hover:opacity-80 transition-opacity"
+                    disabled={isPending}
                   >
                     <TagBadge name={tag.name} color={tag.color} />
                   </button>
@@ -179,15 +161,15 @@ export function TagPicker({ noteId, currentTags, onTagsChange }: TagPickerProps)
                 placeholder="Tag name..."
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && createTag()}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateTag()}
                 className="flex-1"
               />
               <Button
-                onClick={createTag}
-                disabled={!newTagName.trim() || isCreating}
+                onClick={handleCreateTag}
+                disabled={!newTagName.trim() || isPending}
                 size="sm"
               >
-                {isCreating ? <Loader2 size={14} className="animate-spin" /> : 'Add'}
+                {isPending ? <Loader2 size={14} className="animate-spin" /> : 'Add'}
               </Button>
             </div>
             <div className="flex gap-1 mt-2">
