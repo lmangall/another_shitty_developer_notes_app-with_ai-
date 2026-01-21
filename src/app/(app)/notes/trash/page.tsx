@@ -14,7 +14,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { TagBadge } from '@/components/tag-badge';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
+
+function formatDate(dateValue: string | Date | null | undefined): string {
+  if (!dateValue) return 'Unknown';
+  const date = new Date(dateValue);
+  return isValid(date) ? format(date, "MMM d, yyyy 'at' h:mm a") : 'Unknown';
+}
 
 interface Tag {
   id: string;
@@ -161,7 +167,7 @@ export default function TrashPage() {
                       {note.content.replace(/[#*`\n]/g, ' ').slice(0, 200)}
                     </p>
                     <p className="text-xs text-muted-foreground/60 mt-2">
-                      Deleted {note.deletedAt ? format(new Date(note.deletedAt), 'MMM d, yyyy \'at\' h:mm a') : 'Unknown'}
+                      Deleted {formatDate(note.deletedAt)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

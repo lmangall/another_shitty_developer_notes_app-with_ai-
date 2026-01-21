@@ -13,7 +13,13 @@ import {
   SheetFooter,
 } from '@/components/ui/sheet';
 import { TiptapEditor } from '@/components/notes/tiptap-editor';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
+
+function formatDate(dateValue: string | Date | null | undefined): string {
+  if (!dateValue) return 'Unknown';
+  const date = new Date(dateValue);
+  return isValid(date) ? format(date, 'MMM d, yyyy h:mm a') : 'Unknown';
+}
 
 interface Note {
   id: string;
@@ -146,10 +152,10 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
 
             <SheetFooter className="mt-6 flex-col gap-4 sm:flex-col">
               <div className="text-sm text-muted-foreground">
-                Created {format(new Date(note.createdAt), 'MMM d, yyyy h:mm a')}
+                Created {formatDate(note.createdAt)}
                 {note.updatedAt !== note.createdAt && (
                   <span className="ml-4">
-                    Updated {format(new Date(note.updatedAt), 'MMM d, yyyy h:mm a')}
+                    Updated {formatDate(note.updatedAt)}
                   </span>
                 )}
               </div>
