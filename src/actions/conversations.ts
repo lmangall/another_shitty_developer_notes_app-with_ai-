@@ -160,7 +160,7 @@ export async function deleteConversations(
 
   const validation = deleteConversationsSchema.safeParse(input);
   if (!validation.success) {
-    return error(validation.error.errors[0].message, 'VALIDATION');
+    return error(validation.error.issues[0].message, 'VALIDATION');
   }
 
   const { ids } = validation.data;
