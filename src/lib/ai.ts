@@ -134,6 +134,7 @@ const deleteNoteSchema = z.object({
 const createReminderSchema = z.object({
   message: z.string().describe('The reminder message - what the user wants to be reminded about'),
   remindAt: z.string().nullable().describe('ISO datetime string for when to send the reminder, or null if no specific time mentioned'),
+  notifyVia: z.enum(['email', 'push', 'both']).optional().describe('How to send the notification: "email" for email only, "push" for push notification only, or "both" for both. Defaults to "both" if not specified.'),
 });
 
 const cancelReminderSchema = z.object({
@@ -322,11 +323,12 @@ export function createTools(userId: string, userTags: { id: string; name: string
     },
 
     createReminder: {
-      description: 'Create a reminder to notify the user at a specific time. Use this when the user wants to be reminded about something.',
+      description: 'Create a reminder to notify the user at a specific time. Use this when the user wants to be reminded about something. Pay attention to how the user wants to be notified - if they mention "push notification", "push", or "notification on my phone/device", use notifyVia: "push". If they mention "email", use notifyVia: "email". If not specified, default to "both".',
       inputSchema: createReminderSchema,
-      execute: async ({ message, remindAt }: z.infer<typeof createReminderSchema>): Promise<ToolExecutionResult> => {
+      execute: async ({ message, remindAt, notifyVia }: z.infer<typeof createReminderSchema>): Promise<ToolExecutionResult> => {
         try {
           const remindAtDate = remindAt ? new Date(remindAt) : null;
+          const notificationMethod = notifyVia || 'both';
           const [reminder] = await db
             .insert(reminders)
             .values({
@@ -334,7 +336,7 @@ export function createTools(userId: string, userTags: { id: string; name: string
               message,
               remindAt: remindAtDate,
               status: 'pending',
-              notifyVia: 'both', // Default to both push and email for agent-created reminders
+              notifyVia: notificationMethod,
             })
             .returning();
 
@@ -342,6 +344,7 @@ export function createTools(userId: string, userTags: { id: string; name: string
           if (reminder.remindAt) {
             resultMessage += ` for ${reminder.remindAt.toLocaleString()}`;
           }
+          resultMessage += ` (via ${notificationMethod})`;
 
           return {
             success: true,
@@ -351,6 +354,7 @@ export function createTools(userId: string, userTags: { id: string; name: string
               reminderId: reminder.id,
               message: reminder.message,
               remindAt: reminder.remindAt?.toISOString() || null,
+              notifyVia: notificationMethod,
             },
           };
         } catch (error) {
