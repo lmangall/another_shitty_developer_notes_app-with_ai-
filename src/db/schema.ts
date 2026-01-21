@@ -145,6 +145,24 @@ export const chatMessages = pgTable('chat_messages', {
   index('idx_chat_messages_conversation').on(table.conversationId),
 ]);
 
+// Todos table (Eisenhower Matrix Canvas)
+export const todos = pgTable('todos', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  // Canvas position: X = urgency (0=urgent, 100=not urgent), Y = importance (0=important, 100=not important)
+  positionX: integer('position_x').notNull().default(50), // Default to center
+  positionY: integer('position_y').notNull().default(50),
+  status: text('status').notNull().default('pending'), // 'pending' | 'completed'
+  dueDate: timestamp('due_date'),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('idx_todos_user_status').on(table.userId, table.status),
+]);
+
 // Email audit log
 export const emailLogs = pgTable('email_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -185,3 +203,5 @@ export type ChatConversation = typeof chatConversations.$inferSelect;
 export type NewChatConversation = typeof chatConversations.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type NewChatMessage = typeof chatMessages.$inferInsert;
+export type Todo = typeof todos.$inferSelect;
+export type NewTodo = typeof todos.$inferInsert;

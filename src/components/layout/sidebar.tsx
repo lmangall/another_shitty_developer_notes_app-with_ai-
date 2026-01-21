@@ -4,19 +4,24 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { LayoutDashboard, FileText, Bell, Mail, LogOut, Sun, Moon, Menu, X, Trash2, Plug, ChevronDown, Sparkles } from 'lucide-react';
+import { LayoutDashboard, FileText, Bell, Mail, LogOut, Sun, Moon, Menu, X, Trash2, Plug, ChevronDown, Sparkles, HelpCircle, CheckSquare } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { changelog, typeColors, typeLabels } from '@/lib/changelog';
 
-const navItems = [
+const mainNavItems = [
   { href: '/notes', label: 'Notes', icon: FileText },
-  { href: '/notes/trash', label: 'Trash', icon: Trash2 },
+  { href: '/todos', label: 'Todos', icon: CheckSquare },
   { href: '/reminders', label: 'Reminders', icon: Bell },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/logs', label: 'Email Logs', icon: Mail },
+];
+
+const bottomNavItems = [
   { href: '/integrations', label: 'Integrations', icon: Plug },
+  { href: '/faq', label: 'FAQ', icon: HelpCircle },
+  { href: '/notes/trash', label: 'Trash', icon: Trash2 },
 ];
 
 function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
@@ -49,12 +54,38 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         </Button>
       </div>
 
-      <nav className="flex-1 px-4">
+      <nav className="flex-1 px-4 flex flex-col">
         <ul className="space-y-1">
-          {navItems.map((item) => {
+          {mainNavItems.map((item) => {
             // Exact match for specific paths, or starts with for others (but not sub-paths)
             const isActive = item.href === '/notes'
               ? pathname === '/notes' || (pathname.startsWith('/notes/') && !pathname.startsWith('/notes/trash'))
+              : pathname.startsWith(item.href);
+            const Icon = item.icon;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={onNavClick}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-2 rounded-md transition-colors text-sm',
+                    isActive
+                      ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                  )}
+                >
+                  <Icon size={18} />
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+
+        <ul className="space-y-1 mt-auto">
+          {bottomNavItems.map((item) => {
+            const isActive = item.href === '/notes/trash'
+              ? pathname === '/notes/trash'
               : pathname.startsWith(item.href);
             const Icon = item.icon;
             return (

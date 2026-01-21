@@ -28,29 +28,27 @@ import {
   type SortOrder,
   type ReminderStatus,
   type ViewOption,
-  type Recurrence,
 } from '@/lib/constants';
-
-const VIEW_STORAGE_KEY = 'reminders-view-preference';
+import {
+  getReminders,
+  updateReminder,
+  deleteReminder as deleteReminderAction,
+} from '@/actions/reminders';
 
 interface Reminder {
   id: string;
   message: string;
-  remindAt: string | null;
-  notifyVia: NotifyVia;
-  status: string;
-  recurrence: Recurrence | null;
-  recurrenceEndDate: string | null;
-  createdAt: string;
-  updatedAt: string;
+  remindAt: Date | string | null;
+  notifyVia: NotifyVia | string;
+  status: ReminderStatus | string;
+  recurrence: string | null;
+  recurrenceEndDate: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  userId?: string;
 }
 
-interface RemindersResponse {
-  reminders: Reminder[];
-  total: number;
-  page: number;
-  totalPages: number;
-}
+const VIEW_STORAGE_KEY = 'reminders-view-preference';
 
 export default function RemindersPage() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -99,19 +97,18 @@ export default function RemindersPage() {
   const fetchReminders = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '20',
+      const result = await getReminders({
+        page,
+        limit: 20,
         sortBy,
         sortOrder,
+        status: statusFilter || undefined,
+        notifyVia: notifyViaFilter || undefined,
       });
-      if (statusFilter) params.set('status', statusFilter);
-      if (notifyViaFilter) params.set('notifyVia', notifyViaFilter);
-
-      const res = await fetch(`/api/reminders?${params}`);
-      const data: RemindersResponse = await res.json();
-      setReminders(data.reminders);
-      setTotalPages(data.totalPages);
+      if (result.success) {
+        setReminders(result.data.items);
+        setTotalPages(result.data.totalPages);
+      }
       // Clear selection when data changes
       setSelectedIds(new Set());
     } catch (error) {
@@ -123,24 +120,22 @@ export default function RemindersPage() {
 
   const updateStatus = async (id: string, status: string) => {
     try {
-      await fetch(`/api/reminders/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      fetchReminders();
+      const result = await updateReminder({ id, status: status as 'pending' | 'sent' | 'completed' | 'cancelled' });
+      if (result.success) {
+        fetchReminders();
+      }
     } catch (error) {
       console.error('Failed to update reminder:', error);
     }
   };
 
-  const deleteReminder = async (id: string) => {
+  const handleDeleteReminder = async (id: string) => {
     try {
-      await fetch(`/api/reminders/${id}`, {
-        method: 'DELETE',
-      });
-      setDeleteTarget(null);
-      fetchReminders();
+      const result = await deleteReminderAction(id);
+      if (result.success) {
+        setDeleteTarget(null);
+        fetchReminders();
+      }
     } catch (error) {
       console.error('Failed to delete reminder:', error);
     }
@@ -149,9 +144,7 @@ export default function RemindersPage() {
   const bulkDelete = async () => {
     try {
       await Promise.all(
-        Array.from(selectedIds).map(id =>
-          fetch(`/api/reminders/${id}`, { method: 'DELETE' })
-        )
+        Array.from(selectedIds).map(id => deleteReminderAction(id))
       );
       setBulkDeleteOpen(false);
       setSelectedIds(new Set());
@@ -169,26 +162,23 @@ export default function RemindersPage() {
         ? format(new Date(reminder.remindAt), "yyyy-MM-dd'T'HH:mm")
         : ''
     );
-    setEditNotifyVia(reminder.notifyVia || 'email');
+    setEditNotifyVia((reminder.notifyVia || 'email') as NotifyVia);
   };
 
   const saveEdit = async () => {
     if (!editTarget) return;
     setEditLoading(true);
     try {
-      const remindAtISO = editRemindAt ? new Date(editRemindAt).toISOString() : null;
-
-      await fetch(`/api/reminders/${editTarget.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: editMessage,
-          remindAt: remindAtISO,
-          notifyVia: editNotifyVia,
-        }),
+      const result = await updateReminder({
+        id: editTarget.id,
+        message: editMessage,
+        remindAt: editRemindAt ? new Date(editRemindAt).toISOString() : undefined,
+        notifyVia: editNotifyVia,
       });
-      setEditTarget(null);
-      fetchReminders();
+      if (result.success) {
+        setEditTarget(null);
+        fetchReminders();
+      }
     } catch (error) {
       console.error('Failed to update reminder:', error);
     } finally {
@@ -338,7 +328,7 @@ export default function RemindersPage() {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deleteTarget && deleteReminder(deleteTarget.id)}
+              onClick={() => deleteTarget && handleDeleteReminder(deleteTarget.id)}
             >
               Delete
             </Button>

@@ -15,6 +15,12 @@ import {
 } from '@/components/ui/dialog';
 import { TagBadge } from '@/components/tag-badge';
 import { format, isValid } from 'date-fns';
+import {
+  getTrashedNotes,
+  restoreNote,
+  permanentlyDeleteNote,
+  type NoteWithTags,
+} from '@/actions/notes';
 
 function formatDate(dateValue: string | Date | null | undefined): string {
   if (!dateValue) return 'Unknown';
@@ -22,36 +28,13 @@ function formatDate(dateValue: string | Date | null | undefined): string {
   return isValid(date) ? format(date, "MMM d, yyyy 'at' h:mm a") : 'Unknown';
 }
 
-interface Tag {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt: string | null;
-  tags: Tag[];
-}
-
-interface TrashResponse {
-  notes: Note[];
-  total: number;
-  page: number;
-  totalPages: number;
-}
-
 export default function TrashPage() {
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [notes, setNotes] = useState<NoteWithTags[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Note | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<NoteWithTags | null>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,18 +45,12 @@ export default function TrashPage() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '20',
-      });
-
-      const res = await fetch(`/api/notes/trash?${params}`);
-      if (!res.ok) {
-        throw new Error('Failed to fetch trash');
+      const result = await getTrashedNotes({ page, limit: 20 });
+      if (!result.success) {
+        throw new Error(result.error);
       }
-      const data: TrashResponse = await res.json();
-      setNotes(data.notes || []);
-      setTotalPages(data.totalPages || 1);
+      setNotes(result.data.items || []);
+      setTotalPages(result.data.totalPages || 1);
     } catch (err) {
       console.error('Failed to fetch trash:', err);
       setError('Failed to load trash. Please try again.');
@@ -83,11 +60,11 @@ export default function TrashPage() {
     }
   };
 
-  const restoreNote = async (id: string) => {
+  const handleRestore = async (id: string) => {
     setRestoring(id);
     try {
-      const res = await fetch(`/api/notes/${id}/restore`, { method: 'POST' });
-      if (res.ok) {
+      const result = await restoreNote(id);
+      if (result.success) {
         fetchTrash();
       }
     } catch (error) {
@@ -97,11 +74,13 @@ export default function TrashPage() {
     }
   };
 
-  const permanentlyDelete = async (id: string) => {
+  const handlePermanentDelete = async (id: string) => {
     try {
-      await fetch(`/api/notes/${id}/permanent`, { method: 'DELETE' });
-      setDeleteTarget(null);
-      fetchTrash();
+      const result = await permanentlyDeleteNote(id);
+      if (result.success) {
+        setDeleteTarget(null);
+        fetchTrash();
+      }
     } catch (error) {
       console.error('Failed to permanently delete note:', error);
     }
@@ -174,7 +153,7 @@ export default function TrashPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => restoreNote(note.id)}
+                      onClick={() => handleRestore(note.id)}
                       disabled={restoring === note.id}
                       className="gap-1"
                     >
@@ -244,7 +223,7 @@ export default function TrashPage() {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deleteTarget && permanentlyDelete(deleteTarget.id)}
+              onClick={() => deleteTarget && handlePermanentDelete(deleteTarget.id)}
             >
               Delete Forever
             </Button>

@@ -11,18 +11,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { ReminderSortOption, SortOrder, NotifyVia, Recurrence } from '@/lib/constants';
+import type { ReminderSortOption, SortOrder, Recurrence } from '@/lib/constants';
 
 interface Reminder {
   id: string;
   message: string;
-  remindAt: string | null;
-  notifyVia: NotifyVia;
+  remindAt: Date | string | null;
+  notifyVia: string;
   status: string;
-  recurrence: Recurrence | null;
-  recurrenceEndDate: string | null;
-  createdAt: string;
-  updatedAt: string;
+  recurrence: Recurrence | string | null;
+  recurrenceEndDate: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  userId?: string;
 }
 
 const recurrenceLabels: Record<string, string> = {
@@ -57,7 +58,7 @@ const statusColors: Record<string, string> = {
   completed: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
 };
 
-const notifyViaIcons: Record<NotifyVia, React.ReactNode> = {
+const notifyViaIcons: Record<string, React.ReactNode> = {
   email: <Mail size={14} className="text-muted-foreground" />,
   push: <Smartphone size={14} className="text-muted-foreground" />,
   both: (
@@ -68,10 +69,10 @@ const notifyViaIcons: Record<NotifyVia, React.ReactNode> = {
   ),
 };
 
-function getUrgencyBadge(remindAt: string | null, status: string): { label: string; className: string } | null {
+function getUrgencyBadge(remindAt: Date | string | null, status: string): { label: string; className: string } | null {
   if (status !== 'pending' || !remindAt) return null;
 
-  const reminderDate = new Date(remindAt);
+  const reminderDate = remindAt instanceof Date ? remindAt : new Date(remindAt);
 
   if (isPast(reminderDate)) {
     return { label: 'Overdue', className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };

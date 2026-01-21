@@ -3,28 +3,11 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { NoteCard } from './note-card';
-
-interface Tag {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  tags: Tag[];
-  cardColSpan: number;
-  cardRowSpan: number;
-  isPinned: boolean;
-}
+import type { NoteWithTags } from '@/actions/notes';
 
 interface SortableNoteCardProps {
-  note: Note;
-  onDelete: (note: Note) => void;
+  note: NoteWithTags;
+  onDelete: (note: NoteWithTags) => void;
   onTagsChange: () => void;
   onResize: (noteId: string, colSpan: number, rowSpan: number) => void;
   onPinToggle: (noteId: string, isPinned: boolean) => void;

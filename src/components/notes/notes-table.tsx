@@ -7,31 +7,14 @@ import { Button } from '@/components/ui/button';
 import { TagBadge } from '@/components/tag-badge';
 import { TagPicker } from '@/components/tag-picker';
 import type { NoteSortOption, SortOrder } from '@/lib/constants';
-
-interface Tag {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  tags: Tag[];
-  cardColSpan: number;
-  cardRowSpan: number;
-  isPinned: boolean;
-}
+import type { NoteWithTags } from '@/actions/notes';
 
 interface NotesTableProps {
-  notes: Note[];
+  notes: NoteWithTags[];
   sortBy: NoteSortOption;
   sortOrder: SortOrder;
   onSortChange: (column: NoteSortOption) => void;
-  onDelete: (note: Note) => void;
+  onDelete: (note: NoteWithTags) => void;
   onTagsChange: () => void;
   onPinToggle: (noteId: string, isPinned: boolean) => void;
 }

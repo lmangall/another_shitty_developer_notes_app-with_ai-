@@ -10,6 +10,7 @@ import { TagBadge } from '@/components/tag-badge';
 import { TagPicker } from '@/components/tag-picker';
 import { ResizeHandle } from './resize-handle';
 import { format } from 'date-fns';
+import type { NoteWithTags } from '@/actions/notes';
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(word => word.length > 0).length;
@@ -26,27 +27,9 @@ function getBodyContent(content: string): string {
   return lines.slice(startIndex).join('\n');
 }
 
-interface Tag {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  tags: Tag[];
-  cardColSpan: number;
-  cardRowSpan: number;
-  isPinned: boolean;
-}
-
 interface NoteCardProps {
-  note: Note;
-  onDelete: (note: Note) => void;
+  note: NoteWithTags;
+  onDelete: (note: NoteWithTags) => void;
   onTagsChange: () => void;
   onResize: (noteId: string, colSpan: number, rowSpan: number) => void;
   onPinToggle: (noteId: string, isPinned: boolean) => void;
