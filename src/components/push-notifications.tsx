@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Bell, BellOff, Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToastActions } from '@/components/ui/toast';
 
 type PermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
 
@@ -13,6 +14,7 @@ export function PushNotificationSettings() {
   const [isLoading, setIsLoading] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [vapidKey, setVapidKey] = useState<string | null>(null);
+  const toast = useToastActions();
 
   useEffect(() => {
     checkNotificationStatus();
@@ -42,6 +44,26 @@ export function PushNotificationSettings() {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       setIsSubscribed(!!subscription);
+    }
+  }
+
+  async function checkAndSuggestMultiDevice() {
+    try {
+      const res = await fetch('/api/push/count');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.count === 1) {
+          // User only has one device, suggest iPhone setup
+          setTimeout(() => {
+            toast.info('Want notifications on your iPhone too?', {
+              label: 'Learn how to set up',
+              href: '/help/push-setup',
+            });
+          }, 1500); // Small delay so it doesn't overlap with success message
+        }
+      }
+    } catch {
+      // Silently fail - this is just a suggestion
     }
   }
 
@@ -89,6 +111,9 @@ export function PushNotificationSettings() {
       if (res.ok) {
         setIsSubscribed(true);
         setTestStatus('Successfully subscribed to notifications!');
+
+        // Check if user only has one device and suggest iPhone setup
+        checkAndSuggestMultiDevice();
       } else {
         throw new Error('Failed to save subscription');
       }

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -11,11 +12,15 @@ interface Toast {
   message: string;
   type: ToastType;
   duration?: number;
+  action?: {
+    label: string;
+    href: string;
+  };
 }
 
 interface ToastContextValue {
   toasts: Toast[];
-  addToast: (message: string, type?: ToastType, duration?: number) => void;
+  addToast: (message: string, type?: ToastType, duration?: number, action?: Toast['action']) => void;
   removeToast: (id: string) => void;
 }
 
@@ -33,10 +38,10 @@ export function useToast() {
 export function useToastActions() {
   const { addToast } = useToast();
   return {
-    success: (message: string) => addToast(message, 'success'),
-    error: (message: string) => addToast(message, 'error'),
-    warning: (message: string) => addToast(message, 'warning'),
-    info: (message: string) => addToast(message, 'info'),
+    success: (message: string, action?: Toast['action']) => addToast(message, 'success', undefined, action),
+    error: (message: string, action?: Toast['action']) => addToast(message, 'error', undefined, action),
+    warning: (message: string, action?: Toast['action']) => addToast(message, 'warning', undefined, action),
+    info: (message: string, action?: Toast['action']) => addToast(message, 'info', undefined, action),
   };
 }
 
@@ -63,16 +68,27 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
   return (
     <div
       className={cn(
-        'pointer-events-auto flex items-center gap-3 rounded-lg border p-4 shadow-lg transition-all animate-in slide-in-from-right-5',
+        'pointer-events-auto flex items-start gap-3 rounded-lg border p-4 shadow-lg transition-all animate-in slide-in-from-right-5',
         toastStyles[toast.type]
       )}
       role="alert"
     >
-      {toastIcons[toast.type]}
-      <p className="text-sm font-medium text-foreground flex-1">{toast.message}</p>
+      <div className="mt-0.5">{toastIcons[toast.type]}</div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground">{toast.message}</p>
+        {toast.action && (
+          <Link
+            href={toast.action.href}
+            className="text-sm font-medium text-primary hover:underline mt-1 inline-block"
+            onClick={onRemove}
+          >
+            {toast.action.label}
+          </Link>
+        )}
+      </div>
       <button
         onClick={onRemove}
-        className="text-muted-foreground hover:text-foreground transition-colors"
+        className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
       >
         <X className="h-4 w-4" />
       </button>
@@ -84,9 +100,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<Toast[]>([]);
 
   const addToast = React.useCallback(
-    (message: string, type: ToastType = 'info', duration?: number) => {
+    (message: string, type: ToastType = 'info', duration?: number, action?: Toast['action']) => {
       const id = Math.random().toString(36).substring(2, 9);
-      setToasts((prev) => [...prev, { id, message, type, duration }]);
+      setToasts((prev) => [...prev, { id, message, type, duration, action }]);
     },
     []
   );
