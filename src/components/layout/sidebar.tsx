@@ -4,10 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { LayoutDashboard, FileText, Bell, Mail, LogOut, Sun, Moon, Menu, X, Trash2, Plug } from 'lucide-react';
+import { LayoutDashboard, FileText, Bell, Mail, LogOut, Sun, Moon, Menu, X, Trash2, Plug, ChevronDown, Sparkles } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { changelog, typeColors, typeLabels } from '@/lib/changelog';
 
 const navItems = [
   { href: '/notes', label: 'Notes', icon: FileText },
@@ -21,6 +22,7 @@ const navItems = [
 function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const [changelogOpen, setChangelogOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -75,6 +77,51 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
           })}
         </ul>
       </nav>
+
+      {/* Changelog Section */}
+      <div className="px-4 py-2 border-t border-sidebar-border">
+        <button
+          onClick={() => setChangelogOpen(!changelogOpen)}
+          className="flex items-center justify-between w-full px-2 py-1.5 text-xs font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <Sparkles size={14} />
+            What&apos;s New
+          </span>
+          <ChevronDown
+            size={14}
+            className={cn(
+              'transition-transform duration-200',
+              changelogOpen && 'rotate-180'
+            )}
+          />
+        </button>
+
+        {changelogOpen && (
+          <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
+            {changelog.slice(0, 8).map((entry, i) => (
+              <div key={i} className="px-2 py-1.5 rounded-md bg-sidebar-accent/30">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span
+                    className={cn(
+                      'text-[10px] font-semibold px-1.5 py-0.5 rounded border',
+                      typeColors[entry.type]
+                    )}
+                  >
+                    {typeLabels[entry.type]}
+                  </span>
+                  <span className="text-[10px] text-sidebar-foreground/50">
+                    {entry.date}
+                  </span>
+                </div>
+                <p className="text-xs text-sidebar-foreground/80 leading-snug">
+                  {entry.message}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="p-4 border-t border-sidebar-border">
         <Button

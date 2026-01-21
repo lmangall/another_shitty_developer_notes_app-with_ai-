@@ -390,6 +390,32 @@ refactor: simplify form validation
 
 ---
 
+## Changelog
+
+When committing **user-facing changes**, update `src/lib/changelog.ts`:
+
+```typescript
+// Add new entry at TOP of the array
+{
+  date: '2025-01-21',
+  type: 'feat',  // feat | fix | refactor | docs | chore
+  message: 'Short description of the change',
+},
+```
+
+**When to add:**
+- New features (feat)
+- Bug fixes users would notice (fix)
+- UI/UX changes (refactor)
+
+**Skip for:**
+- Internal refactors
+- CI/build changes
+- Code cleanup
+- Dev tooling
+
+---
+
 ## Security
 
 - Never commit `.env.local` or secrets
