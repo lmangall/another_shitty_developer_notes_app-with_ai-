@@ -12,6 +12,10 @@ import { format } from 'date-fns';
 import { getNote, updateNote, deleteNote } from '@/actions/notes';
 import type { Note } from '@/db/schema';
 
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+}
+
 // Extract body content by removing the first line if it matches the title
 function getBodyContent(content: string, title: string): string {
   const lines = content.split('\n');
@@ -185,13 +189,16 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
           />
         </CardContent>
 
-        <CardFooter className="text-sm text-muted-foreground">
-          Created {format(new Date(note.createdAt), 'MMM d, yyyy h:mm a')}
-          {note.updatedAt !== note.createdAt && (
-            <span className="ml-4">
-              Updated {format(new Date(note.updatedAt), 'MMM d, yyyy h:mm a')}
-            </span>
-          )}
+        <CardFooter className="text-sm text-muted-foreground flex justify-between">
+          <span>{countWords(content)} words</span>
+          <div>
+            Created {format(new Date(note.createdAt), 'MMM d, yyyy h:mm a')}
+            {note.updatedAt !== note.createdAt && (
+              <span className="ml-4">
+                Updated {format(new Date(note.updatedAt), 'MMM d, yyyy h:mm a')}
+              </span>
+            )}
+          </div>
         </CardFooter>
       </Card>
     </div>

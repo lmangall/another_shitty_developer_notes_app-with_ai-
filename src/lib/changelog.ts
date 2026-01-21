@@ -7,6 +7,11 @@ export interface ChangelogEntry {
 // Add new entries at the top
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2025-01-22',
+    type: 'feat',
+    message: 'Word count displayed in note detail footer',
+  },
+  {
     date: '2025-01-21',
     type: 'fix',
     message: 'Notes with multiple items now create separate todos',
