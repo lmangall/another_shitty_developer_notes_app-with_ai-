@@ -8,6 +8,11 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2025-01-21',
+    type: 'feat',
+    message: 'Eisenhower Matrix for todos with drag positioning',
+  },
+  {
+    date: '2025-01-21',
     type: 'refactor',
     message: 'Notes is now the home page',
   },
