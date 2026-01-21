@@ -60,8 +60,9 @@ export function NoteCard({ note, onDelete, onTagsChange, onResize, onPinToggle, 
     try {
       const result = await transformNoteToTodo(note.id);
       if (result.success) {
-        toast.success('Note transformed into todo');
-        router.push(`/todos?highlight=${result.data.id}`);
+        const count = result.data.length;
+        toast.success(`Created ${count} todo${count !== 1 ? 's' : ''} from note`);
+        router.push('/todos');
       } else {
         toast.error(result.error || 'Failed to transform note');
       }

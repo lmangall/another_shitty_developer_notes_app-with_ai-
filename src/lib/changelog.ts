@@ -8,6 +8,11 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2025-01-21',
+    type: 'fix',
+    message: 'Notes with multiple items now create separate todos',
+  },
+  {
+    date: '2025-01-21',
     type: 'feat',
     message: 'Transform notes into todos with AI-powered extraction',
   },

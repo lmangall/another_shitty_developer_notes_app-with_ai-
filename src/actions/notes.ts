@@ -492,11 +492,15 @@ export async function permanentlyDeleteNote(id: string): Promise<ActionResult<vo
 
 // ============ Transform Note to Todo ============
 
-const todoExtractionSchema = z.object({
-  title: z.string().describe('A short, actionable task title extracted from the note'),
-  description: z.string().nullable().describe('Optional longer description extracted from the note content'),
+const todoItemSchema = z.object({
+  title: z.string().describe('A short, actionable task title'),
+  description: z.string().nullable().describe('Optional longer description or context'),
   priority: z.enum(['do_first', 'schedule', 'delegate', 'eliminate']).describe('Priority based on urgency and importance: "do_first" (urgent & important), "schedule" (important, not urgent), "delegate" (urgent, not important), "eliminate" (not urgent, not important)'),
-  dueDate: z.string().nullable().describe('ISO datetime string if a deadline is mentioned in the note, otherwise null'),
+  dueDate: z.string().nullable().describe('ISO datetime string if a deadline is mentioned, otherwise null'),
+});
+
+const todoExtractionSchema = z.object({
+  todos: z.array(todoItemSchema).describe('Array of todos extracted from the note. Each actionable item should become a separate todo.'),
 });
 
 function priorityToPosition(priority: string): { x: number; y: number } {
@@ -514,7 +518,7 @@ function priorityToPosition(priority: string): { x: number; y: number } {
   }
 }
 
-export async function transformNoteToTodo(noteId: string): Promise<ActionResult<Todo>> {
+export async function transformNoteToTodo(noteId: string): Promise<ActionResult<Todo[]>> {
   const session = await getSession();
   if (!session?.user) {
     return error('Unauthorized', 'UNAUTHORIZED');
@@ -537,43 +541,48 @@ export async function transformNoteToTodo(noteId: string): Promise<ActionResult<
     }
 
     // Use AI to extract todo data from the note
-    const { object: todoData } = await generateObject({
+    const { object: extracted } = await generateObject({
       model,
       schema: todoExtractionSchema,
-      prompt: `Extract a todo/task from this note. Analyze the content to determine:
+      prompt: `Extract actionable todos from this note. If the note contains multiple items or tasks, create a separate todo for each one. Rephrase each item as a clear, actionable task.
+
+For each todo, determine:
 1. A concise, actionable task title
-2. Any additional description/context
-3. Priority based on urgency and importance mentioned
+2. Any additional description/context (optional)
+3. Priority based on urgency and importance
 4. Any due date if mentioned
 
 Note title: ${note.title}
 Note content: ${note.content}`,
     });
 
-    // Convert priority to position
-    const position = priorityToPosition(todoData.priority);
+    // Create all todos
+    const createdTodos: Todo[] = [];
+    for (const todoData of extracted.todos) {
+      const position = priorityToPosition(todoData.priority);
+      const [todo] = await db
+        .insert(todos)
+        .values({
+          userId: session.user.id,
+          title: todoData.title,
+          description: todoData.description,
+          positionX: position.x,
+          positionY: position.y,
+          dueDate: todoData.dueDate ? new Date(todoData.dueDate) : null,
+        })
+        .returning();
+      createdTodos.push(todo);
+    }
 
-    // Create the todo
-    const [todo] = await db
-      .insert(todos)
-      .values({
-        userId: session.user.id,
-        title: todoData.title,
-        description: todoData.description,
-        positionX: position.x,
-        positionY: position.y,
-        dueDate: todoData.dueDate ? new Date(todoData.dueDate) : null,
-      })
-      .returning();
-
-    logger.info('Note transformed to todo', {
+    logger.info('Note transformed to todos', {
       userId: session.user.id,
       noteId: note.id,
-      todoId: todo.id,
+      todoCount: createdTodos.length,
+      todoIds: createdTodos.map(t => t.id),
     });
     revalidatePath('/todos');
 
-    return success(todo);
+    return success(createdTodos);
   } catch (err) {
     logger.error('Failed to transform note to todo', err as Error, { userId: session.user.id, noteId });
     return error('Failed to transform note to todo', 'INTERNAL');
