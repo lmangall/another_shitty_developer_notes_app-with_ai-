@@ -16,6 +16,7 @@ export type NotifyVia = (typeof NOTIFY_VIA_OPTIONS)[number]['value'];
 export const WHITELISTED_EMAILS = [
   'l.mangallon@gmail.com',
   'leonard@42lab.co',
+  'arthur.dent@42lab.co',
   'stefanolombardo@posteo.de',
   'contact@martynastec.com',
 ] as const;
@@ -147,3 +148,47 @@ export type Recurrence = (typeof RECURRENCE_OPTIONS)[number]['value'];
  * Format: notes@echaekul.resend.app
  */
 export const RESEND_INBOUND_EMAIL = 'notes@echaekul.resend.app' as const;
+
+/**
+ * Eisenhower Matrix quadrant options for todos.
+ */
+export const TODO_QUADRANTS = [
+  { value: 'do_first', label: 'Do First', description: 'Urgent + Important', color: '#ef4444' },   // red
+  { value: 'schedule', label: 'Schedule', description: 'Not Urgent + Important', color: '#3b82f6' }, // blue
+  { value: 'delegate', label: 'Delegate', description: 'Urgent + Not Important', color: '#f59e0b' }, // amber
+  { value: 'eliminate', label: 'Eliminate', description: 'Not Urgent + Not Important', color: '#6b7280' }, // gray
+] as const;
+
+export type TodoQuadrant = (typeof TODO_QUADRANTS)[number]['value'];
+
+/**
+ * Status options for todos.
+ */
+export const TODO_STATUS_OPTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'completed', label: 'Completed' },
+] as const;
+
+export type TodoStatus = (typeof TODO_STATUS_OPTIONS)[number]['value'];
+
+/**
+ * View options for todos display.
+ */
+export const TODO_VIEW_OPTIONS = [
+  { value: 'matrix', label: 'Matrix' },
+  { value: 'table', label: 'Table' },
+] as const;
+
+export type TodoViewOption = (typeof TODO_VIEW_OPTIONS)[number]['value'];
+
+/**
+ * Sort options for todos table view.
+ */
+export const TODO_SORT_OPTIONS = [
+  { value: 'position', label: 'Custom Order' },
+  { value: 'createdAt', label: 'Created Date' },
+  { value: 'dueDate', label: 'Due Date' },
+  { value: 'title', label: 'Title' },
+] as const;
+
+export type TodoSortOption = (typeof TODO_SORT_OPTIONS)[number]['value'];

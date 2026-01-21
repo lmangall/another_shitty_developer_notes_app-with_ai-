@@ -48,6 +48,7 @@ export const auth = betterAuth({
     const origin = request?.headers.get('origin');
     const origins: string[] = [
       'http://localhost:3000',
+      'http://localhost:3001',
       process.env.BETTER_AUTH_URL,
       process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
       process.env.VERCEL_BRANCH_URL
