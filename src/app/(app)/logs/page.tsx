@@ -1,9 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, RefreshCw, Trash2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Mail, RefreshCw, Trash2, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
 
 interface EmailLog {
@@ -27,15 +33,15 @@ interface LogsResponse {
 }
 
 const statusIcons: Record<string, React.ReactNode> = {
-  pending: <Clock size={16} className="text-yellow-500" />,
-  processed: <CheckCircle size={16} className="text-green-500" />,
-  failed: <XCircle size={16} className="text-red-500" />,
+  pending: <Clock size={14} className="text-yellow-500" />,
+  processed: <CheckCircle size={14} className="text-green-500" />,
+  failed: <XCircle size={14} className="text-red-500" />,
 };
 
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-50 text-yellow-700',
-  processed: 'bg-green-50 text-green-700',
-  failed: 'bg-red-50 text-red-700',
+  pending: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
+  processed: 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300',
+  failed: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300',
 };
 
 export default function LogsPage() {
@@ -85,14 +91,18 @@ export default function LogsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
+    <div className="max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-foreground">Email Logs</h1>
         <Button variant="secondary" onClick={fetchLogs}>
           <RefreshCw size={18} className="mr-2" />
           Refresh
         </Button>
       </div>
+
+      <p className="text-sm text-muted-foreground mb-6">
+        View incoming emails sent to your notes address. Each email is processed by AI to create notes or reminders.
+      </p>
 
       {loading ? (
         <div className="text-center py-12">
@@ -109,105 +119,183 @@ export default function LogsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {logs.map((log) => (
-            <Card key={log.id}>
-              <CardContent className="py-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      {statusIcons[log.status]}
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${statusColors[log.status]}`}
-                      >
-                        {log.status}
-                      </span>
-                      {log.actionType && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
-                          {log.actionType}
-                        </span>
-                      )}
-                    </div>
+        <div className="border rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-muted/50 border-b">
+                  <th className="text-left px-4 py-3 w-10"></th>
+                  <th className="text-left px-4 py-3 w-28">
+                    <span className="text-xs font-medium text-muted-foreground">Status</span>
+                  </th>
+                  <th className="text-left px-4 py-3 w-28">
+                    <span className="text-xs font-medium text-muted-foreground">Action</span>
+                  </th>
+                  <th className="text-left px-4 py-3">
+                    <span className="text-xs font-medium text-muted-foreground">From</span>
+                  </th>
+                  <th className="text-left px-4 py-3 hidden md:table-cell">
+                    <span className="text-xs font-medium text-muted-foreground">Subject</span>
+                  </th>
+                  <th className="text-right px-4 py-3 w-36">
+                    <span className="text-xs font-medium text-muted-foreground">Date</span>
+                  </th>
+                  <th className="text-right px-4 py-3 w-20">
+                    <span className="text-xs font-medium text-muted-foreground">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <>
+                    <tr
+                      key={log.id}
+                      className="border-b last:border-b-0 hover:bg-muted/30 transition-colors"
+                    >
+                      {/* Expand toggle */}
+                      <td className="px-4 py-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
+                        >
+                          {expandedLog === log.id ? (
+                            <ChevronUp size={14} />
+                          ) : (
+                            <ChevronDown size={14} />
+                          )}
+                        </Button>
+                      </td>
 
-                    <p className="text-sm text-muted-foreground mb-1">
-                      From: <span className="font-medium">{log.fromEmail}</span>
-                    </p>
-                    {log.subject && (
-                      <p className="text-foreground font-medium mb-2">
-                        {log.subject}
-                      </p>
-                    )}
-                    <p className="text-xs text-muted-foreground/70">
-                      {format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}
-                    </p>
-
-                    {expandedLog === log.id && (
-                      <div className="mt-4 space-y-4">
-                        <div>
-                          <p className="text-sm font-medium text-foreground mb-1">
-                            Email Body:
-                          </p>
-                          <pre className="text-sm text-muted-foreground bg-muted p-3 rounded-lg whitespace-pre-wrap">
-                            {log.body}
-                          </pre>
+                      {/* Status */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          {statusIcons[log.status]}
+                          <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${statusColors[log.status]}`}>
+                            {log.status}
+                          </span>
                         </div>
+                      </td>
 
-                        {log.aiResult && (
-                          <div>
-                            <p className="text-sm font-medium text-foreground mb-1">
-                              AI Result:
-                            </p>
-                            <pre className="text-sm text-muted-foreground bg-muted p-3 rounded-lg overflow-x-auto">
-                              {JSON.stringify(log.aiResult, null, 2)}
-                            </pre>
-                          </div>
+                      {/* Action Type */}
+                      <td className="px-4 py-3">
+                        {log.actionType ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            {log.actionType}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
+                      </td>
 
-                        {log.errorMessage && (
-                          <div>
-                            <p className="text-sm font-medium text-destructive mb-1">
-                              Error:
-                            </p>
-                            <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
-                              {log.errorMessage}
-                            </p>
+                      {/* From */}
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-foreground truncate max-w-[200px] block">
+                          {log.fromEmail}
+                        </span>
+                      </td>
+
+                      {/* Subject */}
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <span className="text-sm text-muted-foreground line-clamp-1">
+                          {log.subject || '(no subject)'}
+                        </span>
+                      </td>
+
+                      {/* Date */}
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-sm text-muted-foreground">
+                          {format(new Date(log.createdAt), 'MMM d, h:mm a')}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <MoreVertical size={14} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
+                            >
+                              {expandedLog === log.id ? (
+                                <>
+                                  <ChevronUp size={14} className="mr-2" />
+                                  Collapse
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown size={14} className="mr-2" />
+                                  Expand
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            {log.status === 'failed' && (
+                              <DropdownMenuItem onClick={() => reprocessLog(log.id)}>
+                                <RefreshCw size={14} className="mr-2" />
+                                Reprocess
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={() => deleteLog(log.id)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 size={14} className="mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+
+                    {/* Expanded details row */}
+                    {expandedLog === log.id && (
+                      <tr key={`${log.id}-expanded`} className="border-b bg-muted/20">
+                        <td colSpan={7} className="px-4 py-4">
+                          <div className="space-y-4 pl-10">
+                            <div>
+                              <p className="text-sm font-medium text-foreground mb-1">
+                                Email Body:
+                              </p>
+                              <pre className="text-sm text-muted-foreground bg-muted p-3 rounded-lg whitespace-pre-wrap">
+                                {log.body}
+                              </pre>
+                            </div>
+
+                            {log.aiResult && (
+                              <div>
+                                <p className="text-sm font-medium text-foreground mb-1">
+                                  AI Result:
+                                </p>
+                                <pre className="text-sm text-muted-foreground bg-muted p-3 rounded-lg overflow-x-auto">
+                                  {JSON.stringify(log.aiResult, null, 2)}
+                                </pre>
+                              </div>
+                            )}
+
+                            {log.errorMessage && (
+                              <div>
+                                <p className="text-sm font-medium text-destructive mb-1">
+                                  Error:
+                                </p>
+                                <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
+                                  {log.errorMessage}
+                                </p>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </td>
+                      </tr>
                     )}
-                  </div>
-
-                  <div className="flex gap-2 ml-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        setExpandedLog(expandedLog === log.id ? null : log.id)
-                      }
-                    >
-                      {expandedLog === log.id ? 'Collapse' : 'Expand'}
-                    </Button>
-                    {log.status === 'failed' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => reprocessLog(log.id)}
-                      >
-                        <RefreshCw size={16} />
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteLog(log.id)}
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  </>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
