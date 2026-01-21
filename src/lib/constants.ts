@@ -10,18 +10,14 @@ export const NOTIFY_VIA_OPTIONS = [
 export type NotifyVia = (typeof NOTIFY_VIA_OPTIONS)[number]['value'];
 
 /**
- * Email addresses allowed to send to the webhook for creating notes/reminders.
- * Only emails from these addresses will be processed.
+ * Get whitelisted emails from environment variable.
+ * Emails should be comma-separated in WHITELISTED_EMAILS env var.
  */
-export const WHITELISTED_EMAILS = [
-  'l.mangallon@gmail.com',
-  'leonard@42lab.co',
-  'arthur.dent@42lab.co',
-  'stefanolombardo@posteo.de',
-  'contact@martynastec.com',
-] as const;
-
-export type WhitelistedEmail = (typeof WHITELISTED_EMAILS)[number];
+function getWhitelistedEmails(): string[] {
+  const envEmails = process.env.WHITELISTED_EMAILS;
+  if (!envEmails) return [];
+  return envEmails.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
 
 /**
  * Check if an email address is whitelisted.
@@ -29,9 +25,8 @@ export type WhitelistedEmail = (typeof WHITELISTED_EMAILS)[number];
  */
 export function isEmailWhitelisted(email: string): boolean {
   const normalizedEmail = email.toLowerCase().trim();
-  return WHITELISTED_EMAILS.some(
-    (whitelisted) => whitelisted.toLowerCase() === normalizedEmail
-  );
+  const whitelisted = getWhitelistedEmails();
+  return whitelisted.includes(normalizedEmail);
 }
 
 /**
