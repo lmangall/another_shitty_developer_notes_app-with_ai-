@@ -9,14 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardFooter } from '@/components/ui/card';
 import { TiptapEditor } from '@/components/notes/tiptap-editor';
 import { format } from 'date-fns';
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { getNote, updateNote, deleteNote } from '@/actions/notes';
+import type { Note } from '@/db/schema';
 
 // Extract body content by removing the first line if it matches the title
 function getBodyContent(content: string, title: string): string {
@@ -52,18 +46,20 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    fetchNote();
+    fetchNoteData();
   }, [id]);
 
-  const fetchNote = async () => {
+  const fetchNoteData = async () => {
     try {
-      const res = await fetch(`/api/notes/${id}`);
-      if (!res.ok) throw new Error('Note not found');
-      const data = await res.json();
-      setNote(data);
-      setTitle(data.title);
+      const result = await getNote(id);
+      if (!result.success) {
+        router.push('/notes');
+        return;
+      }
+      setNote(result.data);
+      setTitle(result.data.title);
       // Filter out the title from content if it appears as the first line
-      setContent(getBodyContent(data.content, data.title));
+      setContent(getBodyContent(result.data.content, result.data.title));
     } catch (error) {
       console.error('Failed to fetch note:', error);
       router.push('/notes');
@@ -75,15 +71,13 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/notes/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content }),
-      });
+      const result = await updateNote({ id, title, content });
 
-      if (!res.ok) throw new Error('Failed to update note');
-      const updated = await res.json();
-      setNote(updated);
+      if (!result.success) {
+        console.error('Failed to save note:', result.error);
+        return;
+      }
+      setNote(result.data);
       setEditing(false);
     } catch (error) {
       console.error('Failed to save note:', error);
@@ -97,8 +91,12 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
 
     setDeleting(true);
     try {
-      const res = await fetch(`/api/notes/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete note');
+      const result = await deleteNote(id);
+      if (!result.success) {
+        console.error('Failed to delete note:', result.error);
+        setDeleting(false);
+        return;
+      }
       router.push('/notes');
     } catch (error) {
       console.error('Failed to delete note:', error);

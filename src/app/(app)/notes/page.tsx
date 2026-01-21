@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useTransition } from 'react';
 import { Search, FileText, Send, Bold, Italic, List, Code, Hash } from 'lucide-react';
 import {
   DndContext,
@@ -37,31 +37,14 @@ import { NotesFilterBar } from '@/components/notes/notes-filter-bar';
 import { ViewToggle } from '@/components/notes/view-toggle';
 import type { ViewOption, NoteSortOption, SortOrder } from '@/lib/constants';
 import { useToastActions } from '@/components/ui/toast';
-
-interface Tag {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  tags: Tag[];
-  cardColSpan: number;
-  cardRowSpan: number;
-  isPinned: boolean;
-}
-
-interface NotesResponse {
-  notes: Note[];
-  total: number;
-  page: number;
-  totalPages: number;
-}
+import {
+  getNotes,
+  createNote,
+  updateNote,
+  deleteNote as deleteNoteAction,
+  reorderNotes,
+  type NoteWithTags,
+} from '@/actions/notes';
 
 // Local storage key for view preference
 const VIEW_STORAGE_KEY = 'notes-view-preference';
@@ -83,12 +66,12 @@ function useIsMobile() {
 }
 
 export default function NotesPage() {
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [notes, setNotes] = useState<NoteWithTags[]>([]);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState<Note | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<NoteWithTags | null>(null);
   const [newNote, setNewNote] = useState('');
   const [creating, setCreating] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -149,21 +132,20 @@ export default function NotesPage() {
   const fetchNotes = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: '20',
+      const result = await getNotes({
+        page,
+        limit: 20,
         sortBy,
         sortOrder,
+        search: search || undefined,
+        tags: selectedTagIds.length > 0 ? selectedTagIds : undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
       });
-      if (search) params.set('search', search);
-      if (selectedTagIds.length > 0) params.set('tags', selectedTagIds.join(','));
-      if (dateFrom) params.set('dateFrom', dateFrom);
-      if (dateTo) params.set('dateTo', dateTo);
-
-      const res = await fetch(`/api/notes?${params}`);
-      const data: NotesResponse = await res.json();
-      setNotes(data.notes);
-      setTotalPages(data.totalPages);
+      if (result.success) {
+        setNotes(result.data.items);
+        setTotalPages(result.data.totalPages);
+      }
     } catch (error) {
       console.error('Failed to fetch notes:', error);
     } finally {
@@ -193,18 +175,14 @@ export default function NotesPage() {
       }
       const content = bodyLines.slice(startIndex).join('\n').trim() || title;
 
-      const res = await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content }),
-      });
+      const result = await createNote({ title, content });
 
-      if (res.ok) {
+      if (result.success) {
         setNewNote('');
         fetchNotes();
         toast.success('Note created');
       } else {
-        toast.error('Failed to create note');
+        toast.error(result.error);
       }
     } catch (error) {
       console.error('Failed to create note:', error);
@@ -332,15 +310,15 @@ export default function NotesPage() {
     }, 0);
   };
 
-  const deleteNote = async (id: string) => {
+  const handleDeleteNote = async (id: string) => {
     try {
-      const res = await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+      const result = await deleteNoteAction(id);
       setDeleteTarget(null);
-      if (res.ok) {
+      if (result.success) {
         fetchNotes();
         toast.success('Note moved to trash');
       } else {
-        toast.error('Failed to delete note');
+        toast.error(result.error);
       }
     } catch (error) {
       console.error('Failed to delete note:', error);
@@ -368,13 +346,13 @@ export default function NotesPage() {
     ));
 
     try {
-      const res = await fetch(`/api/notes/${noteId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cardColSpan: colSpan, cardRowSpan: rowSpan }),
+      const result = await updateNote({
+        id: noteId,
+        cardColSpan: colSpan,
+        cardRowSpan: rowSpan,
       });
 
-      if (!res.ok) {
+      if (!result.success) {
         // Revert on error
         fetchNotes();
       }
@@ -391,15 +369,11 @@ export default function NotesPage() {
     ));
 
     try {
-      const res = await fetch(`/api/notes/${noteId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isPinned }),
-      });
+      const result = await updateNote({ id: noteId, isPinned });
 
-      if (!res.ok) {
+      if (!result.success) {
         fetchNotes();
-        toast.error('Failed to update pin status');
+        toast.error(result.error);
       } else {
         // Re-fetch to get correct sort order with pinned notes first
         fetchNotes();
@@ -446,11 +420,10 @@ export default function NotesPage() {
 
         // Persist new order
         try {
-          await fetch('/api/notes/reorder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ noteIds: newNotes.map(n => n.id) }),
-          });
+          const result = await reorderNotes({ noteIds: newNotes.map(n => n.id) });
+          if (!result.success) {
+            fetchNotes();
+          }
         } catch (error) {
           console.error('Failed to reorder notes:', error);
           fetchNotes();
@@ -686,7 +659,7 @@ export default function NotesPage() {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deleteTarget && deleteNote(deleteTarget.id)}
+              onClick={() => deleteTarget && handleDeleteNote(deleteTarget.id)}
             >
               Delete
             </Button>

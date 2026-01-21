@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { createNote } from '@/actions/notes';
 
 export default function NewNotePage() {
   const router = useRouter();
@@ -29,18 +30,14 @@ export default function NewNotePage() {
     setError('');
 
     try {
-      const res = await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content }),
-      });
+      const result = await createNote({ title, content });
 
-      if (!res.ok) {
-        throw new Error('Failed to create note');
+      if (!result.success) {
+        setError(result.error);
+        return;
       }
 
-      const note = await res.json();
-      router.push(`/notes/${note.id}`);
+      router.push(`/notes/${result.data.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create note');
     } finally {

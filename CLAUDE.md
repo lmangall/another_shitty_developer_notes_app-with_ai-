@@ -146,7 +146,7 @@ npm run db:studio    # Open Drizzle Studio
 
 ## Direct Database Operations (via Claude)
 
-When the user asks to create, update, or delete notes, reminders, or tags directly via prompt, choose the appropriate method:
+When the user asks to create, update, or delete notes, reminders, todos, or tags directly via prompt, choose the appropriate method:
 
 ### Simple Operations → One-liner tsx
 For single queries or simple operations (1-2 steps):
@@ -167,7 +167,7 @@ For multi-step operations (lookups, conditionals, multiple inserts):
 // scripts/task-name.ts
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
-import { users, notes, tags, noteTags, reminders } from '../src/db/schema';
+import { users, notes, tags, noteTags, reminders, todos } from '../src/db/schema';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env' });
 
@@ -198,6 +198,22 @@ Tags are dynamic and user-specific. When creating:
 - Choose descriptive names (Work, Personal, Health, Finance, Learning, Ideas, Project, Urgent, etc.)
 - Assign distinct hex colors: `#ef4444` (red), `#3b82f6` (blue), `#f59e0b` (amber), `#10b981` (emerald), `#ec4899` (pink), `#8b5cf6` (violet), `#06b6d4` (cyan), `#dc2626` (red-600)
 - Link to notes via `noteTags` junction table (noteId, tagId)
+
+### Todos
+Todos use an Eisenhower Matrix canvas for prioritization via X/Y positioning:
+- **title**: Short task description (required)
+- **description**: Optional longer details
+- **positionX**: 0-100 where 0=Urgent, 100=Not Urgent (default: 50)
+- **positionY**: 0-100 where 0=Important, 100=Not Important (default: 50)
+- **status**: `pending` (default) or `completed`
+- **dueDate**: Optional DateTime
+- **completedAt**: Set automatically when status changes to `completed`
+
+**Quadrant placement guide:**
+- **Do First** (urgent + important): positionX ≈ 0-25, positionY ≈ 0-25
+- **Schedule** (not urgent + important): positionX ≈ 75-100, positionY ≈ 0-25
+- **Delegate** (urgent + not important): positionX ≈ 0-25, positionY ≈ 75-100
+- **Eliminate** (not urgent + not important): positionX ≈ 75-100, positionY ≈ 75-100
 
 ---
 

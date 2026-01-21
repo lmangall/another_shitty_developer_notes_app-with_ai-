@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { NOTIFY_VIA_OPTIONS, RECURRENCE_OPTIONS, type NotifyVia, type Recurrence } from '@/lib/constants';
+import { createReminder } from '@/actions/reminders';
 
 export default function NewReminderPage() {
   const router = useRouter();
@@ -45,20 +46,16 @@ export default function NewReminderPage() {
     setError('');
 
     try {
-      const res = await fetch('/api/reminders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          remindAt: getRemindAtValue(),
-          notifyVia,
-          recurrence: recurrence || null,
-          recurrenceEndDate: recurrenceEndDate?.toISOString() || null,
-        }),
+      const result = await createReminder({
+        message,
+        remindAt: getRemindAtValue() ?? undefined,
+        notifyVia,
+        recurrence: recurrence || undefined,
+        recurrenceEndDate: recurrenceEndDate?.toISOString(),
       });
 
-      if (!res.ok) {
-        throw new Error('Failed to create reminder');
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
       router.push('/reminders');

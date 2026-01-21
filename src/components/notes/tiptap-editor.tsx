@@ -81,9 +81,8 @@ function EditorToolbar({
   isRawMode: boolean;
   onToggleRaw: () => void;
 }) {
-  if (!editor) return null;
-
   const setLink = useCallback(() => {
+    if (!editor) return;
     const previousUrl = editor.getAttributes('link').href;
     const url = window.prompt('URL', previousUrl);
 
@@ -96,6 +95,8 @@ function EditorToolbar({
 
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   }, [editor]);
+
+  if (!editor) return null;
 
   return (
     <div className="flex items-center gap-1 px-3 py-2 border-b bg-muted/30 flex-wrap">
@@ -273,12 +274,15 @@ export function TiptapEditor({
     }
   }, [value, editor]);
 
-  // Sync raw content when switching modes
+  // Sync raw content when switching to raw mode
+  // This is intentional - we need to sync the raw editor content with the value when mode changes
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (isRawMode) {
+    if (isRawMode && rawContent !== value) {
       setRawContent(value);
     }
-  }, [isRawMode, value]);
+  }, [isRawMode, value, rawContent]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Handle keyboard shortcuts
   useEffect(() => {

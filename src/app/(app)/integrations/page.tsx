@@ -5,12 +5,13 @@ import { Calendar, Check, ExternalLink, Loader2, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToastActions } from '@/components/ui/toast';
+import { getIntegrations, connectGoogleCalendar, disconnectGoogleCalendar } from '@/actions/integrations';
 
 interface Integration {
   id: string;
   provider: string;
   status: string;
-  connectedAt: string;
+  connectedAt: Date | string;
 }
 
 const AVAILABLE_INTEGRATIONS = [
@@ -36,10 +37,9 @@ export default function IntegrationsPage() {
 
   const fetchIntegrations = async () => {
     try {
-      const res = await fetch('/api/integrations');
-      if (res.ok) {
-        const data = await res.json();
-        setIntegrations(data.integrations || []);
+      const result = await getIntegrations();
+      if (result.success) {
+        setIntegrations(result.data || []);
       }
     } catch (error) {
       console.error('Failed to fetch integrations:', error);
@@ -51,22 +51,22 @@ export default function IntegrationsPage() {
   const handleConnect = async (provider: string) => {
     setConnecting(provider);
     try {
-      const res = await fetch(`/api/integrations/${provider}/connect`, {
-        method: 'POST',
-      });
+      // Currently only Google Calendar is supported
+      if (provider !== 'google-calendar') {
+        toast.error('Integration not supported');
+        return;
+      }
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.redirectUrl) {
-          // Open OAuth flow in new window
-          window.open(data.redirectUrl, '_blank', 'width=600,height=700');
-          toast.info('Please complete the authorization in the popup window.');
-          // Poll for connection status
-          pollConnectionStatus(provider);
-        }
+      const result = await connectGoogleCalendar();
+
+      if (result.success && result.data.redirectUrl) {
+        // Open OAuth flow in new window
+        window.open(result.data.redirectUrl, '_blank', 'width=600,height=700');
+        toast.info('Please complete the authorization in the popup window.');
+        // Poll for connection status
+        pollConnectionStatus(provider);
       } else {
-        const errorData = await res.json();
-        toast.error(errorData.error || 'Failed to initiate connection');
+        toast.error(result.success ? 'Failed to get redirect URL' : result.error);
       }
     } catch (error) {
       console.error('Failed to connect:', error);
@@ -83,14 +83,13 @@ export default function IntegrationsPage() {
     const poll = async () => {
       attempts++;
       try {
-        const res = await fetch('/api/integrations');
-        if (res.ok) {
-          const data = await res.json();
-          const connected = data.integrations?.find(
+        const result = await getIntegrations();
+        if (result.success) {
+          const connected = result.data?.find(
             (i: Integration) => i.provider === provider && i.status === 'active'
           );
           if (connected) {
-            setIntegrations(data.integrations);
+            setIntegrations(result.data);
             toast.success(`${provider} has been connected successfully.`);
             return;
           }
@@ -110,16 +109,19 @@ export default function IntegrationsPage() {
   const handleDisconnect = async (provider: string) => {
     setDisconnecting(provider);
     try {
-      const res = await fetch(`/api/integrations/${provider}`, {
-        method: 'DELETE',
-      });
+      // Currently only Google Calendar is supported
+      if (provider !== 'google-calendar') {
+        toast.error('Integration not supported');
+        return;
+      }
 
-      if (res.ok) {
+      const result = await disconnectGoogleCalendar();
+
+      if (result.success) {
         setIntegrations(integrations.filter((i) => i.provider !== provider));
         toast.success(`${provider} has been disconnected.`);
       } else {
-        const errorData = await res.json();
-        toast.error(errorData.error || 'Failed to disconnect');
+        toast.error(result.error || 'Failed to disconnect');
       }
     } catch (error) {
       console.error('Failed to disconnect:', error);

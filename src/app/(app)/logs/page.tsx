@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { Mail, RefreshCw, Trash2, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,26 +11,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
-
-interface EmailLog {
-  id: string;
-  fromEmail: string;
-  toEmail: string;
-  subject: string | null;
-  body: string;
-  aiResult: Record<string, unknown> | null;
-  actionType: string | null;
-  status: string;
-  errorMessage: string | null;
-  createdAt: string;
-}
-
-interface LogsResponse {
-  logs: EmailLog[];
-  total: number;
-  page: number;
-  totalPages: number;
-}
+import { getLogs, reprocessLog, deleteLog } from '@/actions/logs';
+import type { EmailLog } from '@/db/schema';
 
 const statusIcons: Record<string, React.ReactNode> = {
   pending: <Clock size={14} className="text-yellow-500" />,
@@ -50,52 +32,49 @@ export default function LogsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchLogs();
-  }, [page]);
+  const [isPending, startTransition] = useTransition();
 
   const fetchLogs = async () => {
     setLoading(true);
-    try {
-      const res = await fetch(`/api/logs?page=${page}&limit=20`);
-      const data: LogsResponse = await res.json();
-      setLogs(data.logs);
-      setTotalPages(data.totalPages);
-    } catch (error) {
-      console.error('Failed to fetch logs:', error);
-    } finally {
-      setLoading(false);
+    const result = await getLogs({ page, limit: 20 });
+    if (result.success) {
+      setLogs(result.data.items);
+      setTotalPages(result.data.totalPages);
     }
+    setLoading(false);
   };
 
-  const reprocessLog = async (id: string) => {
-    try {
-      const res = await fetch(`/api/logs/${id}`, { method: 'POST' });
-      if (!res.ok) throw new Error('Reprocess failed');
-      fetchLogs();
-    } catch (error) {
-      console.error('Failed to reprocess:', error);
-    }
+  useEffect(() => {
+    fetchLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  const handleReprocessLog = (id: string) => {
+    startTransition(async () => {
+      const result = await reprocessLog(id);
+      if (result.success) {
+        fetchLogs();
+      }
+    });
   };
 
-  const deleteLog = async (id: string) => {
+  const handleDeleteLog = (id: string) => {
     if (!confirm('Are you sure you want to delete this log?')) return;
 
-    try {
-      await fetch(`/api/logs/${id}`, { method: 'DELETE' });
-      fetchLogs();
-    } catch (error) {
-      console.error('Failed to delete:', error);
-    }
+    startTransition(async () => {
+      const result = await deleteLog(id);
+      if (result.success) {
+        fetchLogs();
+      }
+    });
   };
 
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-foreground">Email Logs</h1>
-        <Button variant="secondary" onClick={fetchLogs}>
-          <RefreshCw size={18} className="mr-2" />
+        <Button variant="secondary" onClick={fetchLogs} disabled={loading || isPending}>
+          <RefreshCw size={18} className={`mr-2 ${(loading || isPending) ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>
@@ -235,14 +214,18 @@ export default function LogsPage() {
                               )}
                             </DropdownMenuItem>
                             {log.status === 'failed' && (
-                              <DropdownMenuItem onClick={() => reprocessLog(log.id)}>
-                                <RefreshCw size={14} className="mr-2" />
+                              <DropdownMenuItem
+                                onClick={() => handleReprocessLog(log.id)}
+                                disabled={isPending}
+                              >
+                                <RefreshCw size={14} className={`mr-2 ${isPending ? 'animate-spin' : ''}`} />
                                 Reprocess
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem
-                              onClick={() => deleteLog(log.id)}
+                              onClick={() => handleDeleteLog(log.id)}
                               className="text-destructive focus:text-destructive"
+                              disabled={isPending}
                             >
                               <Trash2 size={14} className="mr-2" />
                               Delete
@@ -266,7 +249,7 @@ export default function LogsPage() {
                               </pre>
                             </div>
 
-                            {log.aiResult && (
+                            {log.aiResult !== null && (
                               <div>
                                 <p className="text-sm font-medium text-foreground mb-1">
                                   AI Result:

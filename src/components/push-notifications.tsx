@@ -5,6 +5,7 @@ import { Bell, BellOff, Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToastActions } from '@/components/ui/toast';
+import { subscribePush, unsubscribePush, testPushNotification, getPushSubscriptionCount } from '@/actions/push';
 
 type PermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
 
@@ -49,18 +50,15 @@ export function PushNotificationSettings() {
 
   async function checkAndSuggestMultiDevice() {
     try {
-      const res = await fetch('/api/push/count');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.count === 1) {
-          // User only has one device, suggest iPhone setup
-          setTimeout(() => {
-            toast.info('Want notifications on your iPhone too?', {
-              label: 'Learn how to set up',
-              href: '/help/push-setup',
-            });
-          }, 1500); // Small delay so it doesn't overlap with success message
-        }
+      const result = await getPushSubscriptionCount();
+      if (result.success && result.data.count === 1) {
+        // User only has one device, suggest iPhone setup
+        setTimeout(() => {
+          toast.info('Want notifications on your iPhone too?', {
+            label: 'Learn how to set up',
+            href: '/help/push-setup',
+          });
+        }, 1500); // Small delay so it doesn't overlap with success message
       }
     } catch {
       // Silently fail - this is just a suggestion
@@ -102,20 +100,25 @@ export function PushNotificationSettings() {
       });
 
       // Send subscription to server
-      const res = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription: subscription.toJSON() }),
+      const subJson = subscription.toJSON();
+      const result = await subscribePush({
+        subscription: {
+          endpoint: subJson.endpoint!,
+          keys: {
+            p256dh: subJson.keys!.p256dh!,
+            auth: subJson.keys!.auth!,
+          },
+        },
       });
 
-      if (res.ok) {
+      if (result.success) {
         setIsSubscribed(true);
         setTestStatus('Successfully subscribed to notifications!');
 
         // Check if user only has one device and suggest iPhone setup
         checkAndSuggestMultiDevice();
       } else {
-        throw new Error('Failed to save subscription');
+        throw new Error(result.error || 'Failed to save subscription');
       }
     } catch (error) {
       console.error('Error subscribing:', error);
@@ -132,11 +135,7 @@ export function PushNotificationSettings() {
       if (subscription) {
         await subscription.unsubscribe();
 
-        await fetch('/api/push/subscribe', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint: subscription.endpoint }),
-        });
+        await unsubscribePush({ endpoint: subscription.endpoint });
 
         setIsSubscribed(false);
         setTestStatus('Unsubscribed from notifications');
@@ -153,13 +152,12 @@ export function PushNotificationSettings() {
     setIsLoading(true);
     setTestStatus(null);
     try {
-      const res = await fetch('/api/push/test', { method: 'POST' });
-      const data = await res.json();
+      const result = await testPushNotification();
 
-      if (res.ok) {
-        setTestStatus(data.message || 'Test notification sent!');
+      if (result.success) {
+        setTestStatus(result.data.message || 'Test notification sent!');
       } else {
-        setTestStatus(data.error || 'Failed to send test notification');
+        setTestStatus(result.error || 'Failed to send test notification');
       }
     } catch (error) {
       console.error('Error sending test:', error);

@@ -28,6 +28,42 @@ function truncateText(text: string, maxLength: number): string {
   return text.slice(0, maxLength).trim() + '...';
 }
 
+function SortHeader({
+  column,
+  label,
+  className,
+  sortBy,
+  sortOrder,
+  onSortChange,
+}: {
+  column: NoteSortOption;
+  label: string;
+  className?: string;
+  sortBy: NoteSortOption;
+  sortOrder: SortOrder;
+  onSortChange: (column: NoteSortOption) => void;
+}) {
+  const isActive = sortBy === column;
+
+  return (
+    <button
+      onClick={() => onSortChange(column)}
+      className={`flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors ${className || ''}`}
+    >
+      {label}
+      {isActive ? (
+        sortOrder === 'asc' ? (
+          <ArrowUp size={12} />
+        ) : (
+          <ArrowDown size={12} />
+        )
+      ) : (
+        <ArrowUpDown size={12} className="opacity-40" />
+      )}
+    </button>
+  );
+}
+
 export function NotesTable({
   notes,
   sortBy,
@@ -37,36 +73,6 @@ export function NotesTable({
   onTagsChange,
   onPinToggle,
 }: NotesTableProps) {
-  function SortHeader({
-    column,
-    label,
-    className,
-  }: {
-    column: NoteSortOption;
-    label: string;
-    className?: string;
-  }) {
-    const isActive = sortBy === column;
-
-    return (
-      <button
-        onClick={() => onSortChange(column)}
-        className={`flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors ${className || ''}`}
-      >
-        {label}
-        {isActive ? (
-          sortOrder === 'asc' ? (
-            <ArrowUp size={12} />
-          ) : (
-            <ArrowDown size={12} />
-          )
-        ) : (
-          <ArrowUpDown size={12} className="opacity-40" />
-        )}
-      </button>
-    );
-  }
-
   return (
     <div className="border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
@@ -74,7 +80,7 @@ export function NotesTable({
           <thead>
             <tr className="bg-muted/50 border-b">
               <th className="text-left px-4 py-3">
-                <SortHeader column="title" label="Title" />
+                <SortHeader column="title" label="Title" sortBy={sortBy} sortOrder={sortOrder} onSortChange={onSortChange} />
               </th>
               <th className="text-left px-4 py-3 hidden md:table-cell">
                 <span className="text-xs font-medium text-muted-foreground">
@@ -92,10 +98,10 @@ export function NotesTable({
                 </span>
               </th>
               <th className="text-right px-4 py-3 hidden xl:table-cell w-28">
-                <SortHeader column="createdAt" label="Created" />
+                <SortHeader column="createdAt" label="Created" sortBy={sortBy} sortOrder={sortOrder} onSortChange={onSortChange} />
               </th>
               <th className="text-right px-4 py-3 w-28">
-                <SortHeader column="updatedAt" label="Updated" className="justify-end" />
+                <SortHeader column="updatedAt" label="Updated" className="justify-end" sortBy={sortBy} sortOrder={sortOrder} onSortChange={onSortChange} />
               </th>
               <th className="text-right px-4 py-3 w-20">
                 <span className="text-xs font-medium text-muted-foreground">

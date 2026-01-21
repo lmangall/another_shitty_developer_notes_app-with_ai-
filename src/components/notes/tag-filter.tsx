@@ -10,12 +10,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-
-interface TagData {
-  id: string;
-  name: string;
-  color: string;
-}
+import { getTags } from '@/actions/tags';
+import type { Tag as TagType } from '@/db/schema';
 
 interface TagFilterProps {
   selectedTagIds: string[];
@@ -23,25 +19,20 @@ interface TagFilterProps {
 }
 
 export function TagFilter({ selectedTagIds, onTagsChange }: TagFilterProps) {
-  const [tags, setTags] = useState<TagData[]>([]);
+  const [tags, setTags] = useState<TagType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    fetchTags();
-  }, []);
-
-  async function fetchTags() {
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/tags');
-      const data = await res.json();
-      setTags(data.tags || []);
-    } catch (error) {
-      console.error('Failed to fetch tags:', error);
-    } finally {
+    async function fetchTags() {
+      setIsLoading(true);
+      const result = await getTags();
+      if (result.success) {
+        setTags(result.data);
+      }
       setIsLoading(false);
     }
-  }
+    fetchTags();
+  }, []);
 
   function toggleTag(tagId: string) {
     if (selectedTagIds.includes(tagId)) {

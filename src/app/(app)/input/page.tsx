@@ -5,6 +5,7 @@ import { Mic, MicOff, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { processWithAI } from '@/actions/ai';
 
 interface ActionResult {
   intent: string;
@@ -90,14 +91,33 @@ export default function InputPage() {
     setInput('');
 
     try {
-      const res = await fetch('/api/ai/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: currentInput }),
-      });
+      const actionResult = await processWithAI({ input: currentInput });
 
-      const result: ActionResult = await res.json();
-      setResults((prev) => [result, ...prev]);
+      if (actionResult.success) {
+        setResults((prev) => [
+          {
+            intent: 'processed',
+            result: {
+              success: true,
+              action: 'process',
+              message: actionResult.data.message,
+            },
+          },
+          ...prev,
+        ]);
+      } else {
+        setResults((prev) => [
+          {
+            intent: 'error',
+            result: {
+              success: false,
+              action: 'process',
+              error: actionResult.error,
+            },
+          },
+          ...prev,
+        ]);
+      }
     } catch (error) {
       console.error('Processing error:', error);
       setResults((prev) => [

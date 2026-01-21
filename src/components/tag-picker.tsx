@@ -47,20 +47,22 @@ export function TagPicker({ noteId, currentTags, onTagsChange, open, onOpenChang
   const [isPending, startTransition] = useTransition();
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchTags();
-    }
-  }, [isOpen]);
-
-  async function fetchTags() {
+  const fetchTags = async () => {
     setIsLoading(true);
     const result = await getTags();
     if (result.success) {
       setAllTags(result.data);
     }
     setIsLoading(false);
-  }
+  };
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (isOpen) {
+      fetchTags();
+    }
+  }, [isOpen]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function handleCreateTag() {
     if (!newTagName.trim() || isPending) return;

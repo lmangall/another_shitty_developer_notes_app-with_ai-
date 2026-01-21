@@ -99,6 +99,10 @@ export async function connectGoogleCalendar(): Promise<ActionResult<{ redirectUr
       connectionId: connection.connectionId,
     });
 
+    if (!connection.redirectUrl) {
+      return error('Failed to get redirect URL', 'INTERNAL');
+    }
+
     return success({
       redirectUrl: connection.redirectUrl,
       connectionId: connection.connectionId,

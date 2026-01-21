@@ -93,6 +93,42 @@ function getUrgencyBadge(remindAt: Date | string | null, status: string): { labe
   return null;
 }
 
+function ReminderSortHeader({
+  column,
+  label,
+  className,
+  sortBy,
+  sortOrder,
+  onSortChange,
+}: {
+  column: ReminderSortOption;
+  label: string;
+  className?: string;
+  sortBy: ReminderSortOption;
+  sortOrder: SortOrder;
+  onSortChange: (column: ReminderSortOption) => void;
+}) {
+  const isActive = sortBy === column;
+
+  return (
+    <button
+      onClick={() => onSortChange(column)}
+      className={`flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors ${className || ''}`}
+    >
+      {label}
+      {isActive ? (
+        sortOrder === 'asc' ? (
+          <ArrowUp size={12} />
+        ) : (
+          <ArrowDown size={12} />
+        )
+      ) : (
+        <ArrowUpDown size={12} className="opacity-40" />
+      )}
+    </button>
+  );
+}
+
 export function RemindersTable({
   reminders,
   selectedIds,
@@ -125,36 +161,6 @@ export function RemindersTable({
     onSelectionChange(newSet);
   }
 
-  function SortHeader({
-    column,
-    label,
-    className,
-  }: {
-    column: ReminderSortOption;
-    label: string;
-    className?: string;
-  }) {
-    const isActive = sortBy === column;
-
-    return (
-      <button
-        onClick={() => onSortChange(column)}
-        className={`flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors ${className || ''}`}
-      >
-        {label}
-        {isActive ? (
-          sortOrder === 'asc' ? (
-            <ArrowUp size={12} />
-          ) : (
-            <ArrowDown size={12} />
-          )
-        ) : (
-          <ArrowUpDown size={12} className="opacity-40" />
-        )}
-      </button>
-    );
-  }
-
   return (
     <div className="border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
@@ -173,10 +179,10 @@ export function RemindersTable({
                 />
               </th>
               <th className="text-left px-4 py-3">
-                <SortHeader column="message" label="Message" />
+                <ReminderSortHeader column="message" label="Message" sortBy={sortBy} sortOrder={sortOrder} onSortChange={onSortChange} />
               </th>
               <th className="text-left px-4 py-3 w-24">
-                <SortHeader column="status" label="Status" />
+                <ReminderSortHeader column="status" label="Status" sortBy={sortBy} sortOrder={sortOrder} onSortChange={onSortChange} />
               </th>
               <th className="text-left px-4 py-3 hidden sm:table-cell w-20">
                 <span className="text-xs font-medium text-muted-foreground">
@@ -184,10 +190,10 @@ export function RemindersTable({
                 </span>
               </th>
               <th className="text-right px-4 py-3 w-36">
-                <SortHeader column="remindAt" label="Remind At" className="justify-end" />
+                <ReminderSortHeader column="remindAt" label="Remind At" className="justify-end" sortBy={sortBy} sortOrder={sortOrder} onSortChange={onSortChange} />
               </th>
               <th className="text-right px-4 py-3 hidden lg:table-cell w-28">
-                <SortHeader column="createdAt" label="Created" className="justify-end" />
+                <ReminderSortHeader column="createdAt" label="Created" className="justify-end" sortBy={sortBy} sortOrder={sortOrder} onSortChange={onSortChange} />
               </th>
               <th className="text-right px-4 py-3 w-28">
                 <span className="text-xs font-medium text-muted-foreground">

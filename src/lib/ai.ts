@@ -1,7 +1,7 @@
 import { generateText } from 'ai';
 import { gateway } from '@ai-sdk/gateway';
 import { z } from 'zod';
-import { db, notes, reminders, tags, noteTags } from '@/db';
+import { db, notes, reminders, tags, noteTags, todos } from '@/db';
 import { userIntegrations } from '@/db/schema';
 import { eq, desc, and, ilike, or } from 'drizzle-orm';
 import { getGoogleCalendarTools } from './composio';
@@ -14,12 +14,13 @@ export const model = gateway('anthropic/claude-sonnet-4.5');
 export interface UserContext {
   notes: { id: string; title: string; preview: string; updatedAt: Date }[];
   reminders: { id: string; message: string; remindAt: Date | null; status: string }[];
+  todos: { id: string; title: string; description: string | null; status: string; dueDate: Date | null; positionX: number; positionY: number }[];
   tags: { id: string; name: string; color: string }[];
   integrations?: { provider: string; connectedAccountId: string }[];
 }
 
 export async function getUserContext(userId: string): Promise<UserContext> {
-  const [userNotes, userReminders, userTags, userIntegrationsData] = await Promise.all([
+  const [userNotes, userReminders, userTodos, userTags, userIntegrationsData] = await Promise.all([
     db
       .select({
         id: notes.id,
@@ -41,6 +42,20 @@ export async function getUserContext(userId: string): Promise<UserContext> {
       .from(reminders)
       .where(eq(reminders.userId, userId))
       .orderBy(desc(reminders.createdAt))
+      .limit(20),
+    db
+      .select({
+        id: todos.id,
+        title: todos.title,
+        description: todos.description,
+        status: todos.status,
+        dueDate: todos.dueDate,
+        positionX: todos.positionX,
+        positionY: todos.positionY,
+      })
+      .from(todos)
+      .where(and(eq(todos.userId, userId), eq(todos.status, 'pending')))
+      .orderBy(desc(todos.createdAt))
       .limit(20),
     db
       .select({
@@ -73,6 +88,7 @@ export async function getUserContext(userId: string): Promise<UserContext> {
       remindAt: r.remindAt,
       status: r.status,
     })),
+    todos: userTodos,
     tags: userTags,
     integrations: userIntegrationsData,
   };
@@ -102,6 +118,17 @@ function formatContextForPrompt(context: UserContext): string {
     contextStr += '\n\nYou have no existing reminders.\n';
   }
 
+  if (context.todos.length > 0) {
+    contextStr += '\n\nYour pending Todos:\n';
+    context.todos.forEach((todo, i) => {
+      const quadrant = getQuadrantName(todo.positionX, todo.positionY);
+      const dueStr = todo.dueDate ? ` (due: ${todo.dueDate.toLocaleDateString()})` : '';
+      contextStr += `${i + 1}. [ID: ${todo.id}] "${todo.title}" - ${quadrant}${dueStr}\n`;
+    });
+  } else {
+    contextStr += '\n\nYou have no pending todos.\n';
+  }
+
   if (context.tags.length > 0) {
     contextStr += '\n\nYour available Tags:\n';
     contextStr += context.tags.map(t => t.name).join(', ');
@@ -111,6 +138,15 @@ function formatContextForPrompt(context: UserContext): string {
   }
 
   return contextStr;
+}
+
+function getQuadrantName(positionX: number, positionY: number): string {
+  const isUrgent = positionX < 50;
+  const isImportant = positionY < 50;
+  if (isUrgent && isImportant) return 'Do First (urgent & important)';
+  if (!isUrgent && isImportant) return 'Schedule (important, not urgent)';
+  if (isUrgent && !isImportant) return 'Delegate (urgent, not important)';
+  return 'Eliminate (not urgent, not important)';
 }
 
 // Tool schemas
@@ -139,6 +175,29 @@ const createReminderSchema = z.object({
 
 const cancelReminderSchema = z.object({
   searchQuery: z.string().describe('Query to find the reminder to cancel - use keywords from the reminder message'),
+});
+
+const createTodoSchema = z.object({
+  title: z.string().describe('A short, actionable task title'),
+  description: z.string().optional().describe('Optional longer description of the task'),
+  priority: z.enum(['do_first', 'schedule', 'delegate', 'eliminate']).optional().describe('Priority quadrant: "do_first" (urgent & important), "schedule" (important, not urgent), "delegate" (urgent, not important), "eliminate" (not urgent, not important). Defaults to "do_first" if not specified.'),
+  dueDate: z.string().nullable().optional().describe('Optional ISO datetime string for when the task is due'),
+});
+
+const updateTodoSchema = z.object({
+  searchQuery: z.string().describe('Query to find the todo to update - use keywords from the todo title'),
+  newTitle: z.string().optional().describe('New title if the user wants to rename the todo'),
+  newDescription: z.string().optional().describe('New description for the todo'),
+  priority: z.enum(['do_first', 'schedule', 'delegate', 'eliminate']).optional().describe('New priority quadrant'),
+  dueDate: z.string().nullable().optional().describe('New due date as ISO datetime string, or null to remove'),
+});
+
+const completeTodoSchema = z.object({
+  searchQuery: z.string().describe('Query to find the todo to complete - use keywords from the todo title'),
+});
+
+const deleteTodoSchema = z.object({
+  searchQuery: z.string().describe('Query to find the todo to delete - use keywords from the todo title'),
 });
 
 // Tool result types
@@ -413,7 +472,227 @@ export function createTools(userId: string, userTags: { id: string; name: string
         }
       },
     },
+
+    createTodo: {
+      description: 'Create a new todo/task. Use this when the user wants to add a task, todo item, or something to their to-do list. Todos are organized by priority using the Eisenhower Matrix (urgent/important quadrants).',
+      inputSchema: createTodoSchema,
+      execute: async ({ title, description, priority, dueDate }: z.infer<typeof createTodoSchema>): Promise<ToolExecutionResult> => {
+        try {
+          // Convert priority to position coordinates
+          const positions = priorityToPosition(priority || 'do_first');
+          const dueDateValue = dueDate ? new Date(dueDate) : null;
+
+          const [todo] = await db
+            .insert(todos)
+            .values({
+              userId,
+              title,
+              description: description || null,
+              positionX: positions.x,
+              positionY: positions.y,
+              dueDate: dueDateValue,
+            })
+            .returning();
+
+          let message = `Created todo: "${todo.title}" in ${priority || 'do_first'} quadrant`;
+          if (dueDateValue) {
+            message += ` (due: ${dueDateValue.toLocaleDateString()})`;
+          }
+
+          return {
+            success: true,
+            action: 'createTodo',
+            message,
+            data: { todoId: todo.id, title: todo.title, priority: priority || 'do_first' },
+          };
+        } catch (error) {
+          return {
+            success: false,
+            action: 'createTodo',
+            error: error instanceof Error ? error.message : 'Failed to create todo',
+          };
+        }
+      },
+    },
+
+    updateTodo: {
+      description: 'Update an existing todo/task. Use this when the user wants to modify a task title, description, priority, or due date.',
+      inputSchema: updateTodoSchema,
+      execute: async ({ searchQuery, newTitle, newDescription, priority, dueDate }: z.infer<typeof updateTodoSchema>): Promise<ToolExecutionResult> => {
+        try {
+          const existingTodos = await db
+            .select()
+            .from(todos)
+            .where(
+              and(
+                eq(todos.userId, userId),
+                eq(todos.status, 'pending'),
+                or(
+                  ilike(todos.title, `%${searchQuery}%`),
+                  ilike(todos.description, `%${searchQuery}%`)
+                )
+              )
+            )
+            .orderBy(desc(todos.createdAt))
+            .limit(1);
+
+          if (existingTodos.length === 0) {
+            return {
+              success: false,
+              action: 'updateTodo',
+              error: `No pending todo found matching "${searchQuery}"`,
+            };
+          }
+
+          const todo = existingTodos[0];
+          const updates: { title?: string; description?: string | null; positionX?: number; positionY?: number; dueDate?: Date | null; updatedAt: Date } = {
+            updatedAt: new Date(),
+          };
+
+          if (newTitle) updates.title = newTitle;
+          if (newDescription !== undefined) updates.description = newDescription;
+          if (priority) {
+            const positions = priorityToPosition(priority);
+            updates.positionX = positions.x;
+            updates.positionY = positions.y;
+          }
+          if (dueDate !== undefined) {
+            updates.dueDate = dueDate ? new Date(dueDate) : null;
+          }
+
+          const [updated] = await db
+            .update(todos)
+            .set(updates)
+            .where(eq(todos.id, todo.id))
+            .returning();
+
+          return {
+            success: true,
+            action: 'updateTodo',
+            message: `Updated todo: "${updated.title}"`,
+            data: { todoId: updated.id, title: updated.title },
+          };
+        } catch (error) {
+          return {
+            success: false,
+            action: 'updateTodo',
+            error: error instanceof Error ? error.message : 'Failed to update todo',
+          };
+        }
+      },
+    },
+
+    completeTodo: {
+      description: 'Mark a todo/task as completed. Use this when the user says they finished, completed, or done with a task.',
+      inputSchema: completeTodoSchema,
+      execute: async ({ searchQuery }: z.infer<typeof completeTodoSchema>): Promise<ToolExecutionResult> => {
+        try {
+          const existingTodos = await db
+            .select()
+            .from(todos)
+            .where(
+              and(
+                eq(todos.userId, userId),
+                eq(todos.status, 'pending'),
+                or(
+                  ilike(todos.title, `%${searchQuery}%`),
+                  ilike(todos.description, `%${searchQuery}%`)
+                )
+              )
+            )
+            .orderBy(desc(todos.createdAt))
+            .limit(1);
+
+          if (existingTodos.length === 0) {
+            return {
+              success: false,
+              action: 'completeTodo',
+              error: `No pending todo found matching "${searchQuery}"`,
+            };
+          }
+
+          const todo = existingTodos[0];
+          await db
+            .update(todos)
+            .set({ status: 'completed', completedAt: new Date(), updatedAt: new Date() })
+            .where(eq(todos.id, todo.id));
+
+          return {
+            success: true,
+            action: 'completeTodo',
+            message: `Completed todo: "${todo.title}"`,
+          };
+        } catch (error) {
+          return {
+            success: false,
+            action: 'completeTodo',
+            error: error instanceof Error ? error.message : 'Failed to complete todo',
+          };
+        }
+      },
+    },
+
+    deleteTodo: {
+      description: 'Delete a todo/task. Use this when the user wants to remove or delete a task from their list.',
+      inputSchema: deleteTodoSchema,
+      execute: async ({ searchQuery }: z.infer<typeof deleteTodoSchema>): Promise<ToolExecutionResult> => {
+        try {
+          const existingTodos = await db
+            .select()
+            .from(todos)
+            .where(
+              and(
+                eq(todos.userId, userId),
+                or(
+                  ilike(todos.title, `%${searchQuery}%`),
+                  ilike(todos.description, `%${searchQuery}%`)
+                )
+              )
+            )
+            .orderBy(desc(todos.createdAt))
+            .limit(1);
+
+          if (existingTodos.length === 0) {
+            return {
+              success: false,
+              action: 'deleteTodo',
+              error: `No todo found matching "${searchQuery}"`,
+            };
+          }
+
+          const todo = existingTodos[0];
+          await db.delete(todos).where(eq(todos.id, todo.id));
+
+          return {
+            success: true,
+            action: 'deleteTodo',
+            message: `Deleted todo: "${todo.title}"`,
+          };
+        } catch (error) {
+          return {
+            success: false,
+            action: 'deleteTodo',
+            error: error instanceof Error ? error.message : 'Failed to delete todo',
+          };
+        }
+      },
+    },
   };
+}
+
+function priorityToPosition(priority: string): { x: number; y: number } {
+  switch (priority) {
+    case 'do_first':
+      return { x: 15, y: 15 }; // Urgent & Important (top-left)
+    case 'schedule':
+      return { x: 85, y: 15 }; // Not Urgent & Important (top-right)
+    case 'delegate':
+      return { x: 15, y: 85 }; // Urgent & Not Important (bottom-left)
+    case 'eliminate':
+      return { x: 85, y: 85 }; // Not Urgent & Not Important (bottom-right)
+    default:
+      return { x: 15, y: 15 }; // Default to Do First
+  }
 }
 
 export function buildSystemPrompt(
@@ -442,7 +721,7 @@ export function buildSystemPrompt(
 
   const contextStr = formatContextForPrompt(context);
 
-  let systemPrompt = `You are a helpful assistant that manages notes, reminders, and calendar events for the user.
+  let systemPrompt = `You are a helpful assistant that manages notes, reminders, todos, and calendar events for the user.
 
 Current local time: ${localTimeString}
 Timezone: ${timezone} (${offsetString})
@@ -459,13 +738,24 @@ TOOL SELECTION GUIDE - Use the RIGHT tool for each request:
    Examples: "Remind me to call mom", "Set a reminder for the meeting"
    → Use createReminder
 
-3. NOTES (information to save/reference later):
+3. TODOS (tasks to complete, action items):
+   Keywords: "todo", "task", "to-do", "add to my list", "I need to", "action item"
+   Examples: "Add a todo to buy groceries", "Create a task for...", "I need to finish the report"
+   → Use createTodo (with priority: do_first, schedule, delegate, or eliminate)
+   Priority quadrants (Eisenhower Matrix):
+   - do_first: Urgent AND Important (deadlines, crises)
+   - schedule: Important but NOT Urgent (planning, learning)
+   - delegate: Urgent but NOT Important (interruptions, some emails)
+   - eliminate: NOT Urgent and NOT Important (time wasters)
+
+4. NOTES (information to save/reference later):
    Keywords: "note", "write down", "save", "jot down", "remember this info"
    Examples: "Make a note about...", "Save this recipe", "Write down these ideas"
    → Use createNote
 
-CRITICAL: Do NOT create a note when the user asks for a calendar event or appointment. These are different things:
-- Calendar event = scheduled activity (goes on calendar)
+CRITICAL: Choose the right tool:
+- Calendar event = scheduled activity with a specific time (goes on calendar)
+- Todo = task to complete, action item (goes on todo list)
 - Note = saved information (for reference)
 - Reminder = future notification (alerts the user)
 

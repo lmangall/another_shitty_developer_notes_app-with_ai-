@@ -14,64 +14,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PushNotificationSettings } from '@/components/push-notifications';
 import { format, formatDistanceToNow } from 'date-fns';
-
-interface DashboardStats {
-  totalNotes: number;
-  pendingReminders: number;
-  totalReminders: number;
-  totalLogs: number;
-  failedLogs: number;
-}
-
-interface RecentNote {
-  id: string;
-  title: string;
-  content: string;
-  updatedAt: string;
-}
-
-interface UpcomingReminder {
-  id: string;
-  message: string;
-  remindAt: string | null;
-  status: string;
-}
-
-interface RecentLog {
-  id: string;
-  fromEmail: string;
-  subject: string | null;
-  actionType: string | null;
-  status: string;
-  createdAt: string;
-}
-
-interface DashboardData {
-  stats: DashboardStats;
-  recentNotes: RecentNote[];
-  upcomingReminders: UpcomingReminder[];
-  recentLogs: RecentLog[];
-}
+import { getDashboardData, type DashboardData } from '@/actions/dashboard';
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDashboard();
-  }, []);
-
-  const fetchDashboard = async () => {
-    try {
-      const res = await fetch('/api/dashboard');
-      const dashboardData: DashboardData = await res.json();
-      setData(dashboardData);
-    } catch (error) {
-      console.error('Failed to fetch dashboard:', error);
-    } finally {
+    async function fetchDashboard() {
+      const result = await getDashboardData();
+      if (result.success) {
+        setData(result.data);
+      }
       setLoading(false);
     }
-  };
+    fetchDashboard();
+  }, []);
 
   if (loading) {
     return (
