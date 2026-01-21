@@ -59,7 +59,7 @@ export default function RemindersPage() {
   const [loading, setLoading] = useState(true);
 
   // View
-  const [view, setView] = useState<ViewOption>('grid');
+  const [view, setView] = useState<ViewOption>('table');
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<ReminderStatus | ''>('');
