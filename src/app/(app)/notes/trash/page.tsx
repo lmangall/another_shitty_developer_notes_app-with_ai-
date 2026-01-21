@@ -28,7 +28,7 @@ interface Note {
   content: string;
   createdAt: string;
   updatedAt: string;
-  deletedAt: string;
+  deletedAt: string | null;
   tags: Tag[];
 }
 
@@ -44,6 +44,7 @@ export default function TrashPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Note | null>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
 
@@ -53,6 +54,7 @@ export default function TrashPage() {
 
   const fetchTrash = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -60,11 +62,16 @@ export default function TrashPage() {
       });
 
       const res = await fetch(`/api/notes/trash?${params}`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch trash');
+      }
       const data: TrashResponse = await res.json();
-      setNotes(data.notes);
-      setTotalPages(data.totalPages);
-    } catch (error) {
-      console.error('Failed to fetch trash:', error);
+      setNotes(data.notes || []);
+      setTotalPages(data.totalPages || 1);
+    } catch (err) {
+      console.error('Failed to fetch trash:', err);
+      setError('Failed to load trash. Please try again.');
+      setNotes([]);
     } finally {
       setLoading(false);
     }
@@ -115,6 +122,17 @@ export default function TrashPage() {
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
         </div>
+      ) : error ? (
+        <Card>
+          <CardContent className="text-center py-12">
+            <AlertTriangle size={48} className="mx-auto text-destructive mb-4 opacity-50" />
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={fetchTrash} variant="outline">
+              <RotateCcw size={16} className="mr-2" />
+              Try again
+            </Button>
+          </CardContent>
+        </Card>
       ) : notes.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
@@ -143,7 +161,7 @@ export default function TrashPage() {
                       {note.content.replace(/[#*`\n]/g, ' ').slice(0, 200)}
                     </p>
                     <p className="text-xs text-muted-foreground/60 mt-2">
-                      Deleted {format(new Date(note.deletedAt), 'MMM d, yyyy \'at\' h:mm a')}
+                      Deleted {note.deletedAt ? format(new Date(note.deletedAt), 'MMM d, yyyy \'at\' h:mm a') : 'Unknown'}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

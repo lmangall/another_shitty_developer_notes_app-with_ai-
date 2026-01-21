@@ -42,8 +42,8 @@ export default function Error({
             <RefreshCw className="h-4 w-4" />
             Try again
           </Button>
-          <Button variant="outline" onClick={() => window.location.href = '/dashboard'}>
-            Go to Dashboard
+          <Button variant="outline" onClick={() => window.location.href = '/notes'}>
+            Go to Notes
           </Button>
         </div>
       </div>

@@ -10,7 +10,7 @@ export default async function Home() {
   });
 
   if (session?.user) {
-    redirect('/dashboard');
+    redirect('/notes');
   } else {
     redirect('/login');
   }

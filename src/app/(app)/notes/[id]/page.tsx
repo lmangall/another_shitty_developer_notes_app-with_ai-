@@ -18,6 +18,28 @@ interface Note {
   updatedAt: string;
 }
 
+// Extract body content by removing the first line if it matches the title
+function getBodyContent(content: string, title: string): string {
+  const lines = content.split('\n');
+  // Check if first line looks like the title
+  const firstLine = lines[0]?.trim() || '';
+  const normalizedTitle = title.trim().toLowerCase();
+  const normalizedFirstLine = firstLine.toLowerCase();
+
+  // If first line matches or is similar to the title, skip it
+  if (normalizedFirstLine === normalizedTitle ||
+      normalizedTitle.startsWith(normalizedFirstLine) ||
+      normalizedFirstLine.startsWith(normalizedTitle)) {
+    let startIndex = 1;
+    // Skip empty lines after the title
+    while (startIndex < lines.length && lines[startIndex].trim() === '') {
+      startIndex++;
+    }
+    return lines.slice(startIndex).join('\n');
+  }
+  return content;
+}
+
 export default function NotePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -40,7 +62,8 @@ export default function NotePage({ params }: { params: Promise<{ id: string }> }
       const data = await res.json();
       setNote(data);
       setTitle(data.title);
-      setContent(data.content);
+      // Filter out the title from content if it appears as the first line
+      setContent(getBodyContent(data.content, data.title));
     } catch (error) {
       console.error('Failed to fetch note:', error);
       router.push('/notes');

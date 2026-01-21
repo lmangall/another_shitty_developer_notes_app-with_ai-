@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   FileText,
-  Bell,
-  Mail,
   Clock,
   CheckCircle,
   XCircle,
@@ -96,57 +94,11 @@ export default function DashboardPage() {
     );
   }
 
-  const { stats, recentNotes, upcomingReminders, recentLogs } = data;
+  const { recentNotes, upcomingReminders, recentLogs } = data;
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       <h1 className="text-2xl font-bold">Dashboard</h1>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Notes</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalNotes}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Reminders</CardTitle>
-            <Bell className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pendingReminders}</div>
-            <p className="text-xs text-muted-foreground">
-              of {stats.totalReminders} total
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Email Logs</CardTitle>
-            <Mail className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalLogs}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Failed Logs</CardTitle>
-            <AlertCircle className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{stats.failedLogs}</div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Recent Notes and Upcoming Reminders */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -253,13 +205,13 @@ export default function DashboardPage() {
                   className="flex items-center gap-3 p-3 rounded-md hover:bg-muted/50 transition-colors"
                 >
                   {log.status === 'processed' && (
-                    <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                    <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
                   )}
                   {log.status === 'pending' && (
-                    <Clock className="h-4 w-4 text-yellow-500 flex-shrink-0" />
+                    <Clock className="h-4 w-4 text-yellow-500 shrink-0" />
                   )}
                   {log.status === 'failed' && (
-                    <XCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+                    <XCircle className="h-4 w-4 text-destructive shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm truncate">

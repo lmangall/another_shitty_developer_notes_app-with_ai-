@@ -15,6 +15,17 @@ function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(word => word.length > 0).length;
 }
 
+// Extract body content by removing the first line (title)
+function getBodyContent(content: string): string {
+  const lines = content.split('\n');
+  // Skip the first line (title) and any empty lines immediately after
+  let startIndex = 1;
+  while (startIndex < lines.length && lines[startIndex].trim() === '') {
+    startIndex++;
+  }
+  return lines.slice(startIndex).join('\n');
+}
+
 interface Tag {
   id: string;
   name: string;
@@ -85,7 +96,7 @@ export function NoteCard({ note, onDelete, onTagsChange, onResize, onPinToggle, 
               WebkitBoxOrient: 'vertical',
             }}
           >
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{getBodyContent(note.content)}</ReactMarkdown>
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground/60">
             <span>{countWords(note.content)} words</span>

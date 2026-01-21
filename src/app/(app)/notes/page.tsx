@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, FileText, Send, Bold, Italic, List, Code, Hash } from 'lucide-react';
 import {
   DndContext,
@@ -66,6 +66,22 @@ interface NotesResponse {
 // Local storage key for view preference
 const VIEW_STORAGE_KEY = 'notes-view-preference';
 
+// Hook to detect mobile devices
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  return isMobile;
+}
+
 export default function NotesPage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [search, setSearch] = useState('');
@@ -92,8 +108,11 @@ export default function NotesPage() {
   // Toast notifications
   const toast = useToastActions();
 
-  // dnd-kit sensors
-  const sensors = useSensors(
+  // Detect mobile for DND
+  const isMobile = useIsMobile();
+
+  // dnd-kit sensors - disabled on mobile
+  const desktopSensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
@@ -103,6 +122,11 @@ export default function NotesPage() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // Empty sensors for mobile (effectively disables DND)
+  const mobileSensors = useSensors();
+
+  const sensors = isMobile ? mobileSensors : desktopSensors;
 
   // Load view preference from localStorage
   useEffect(() => {
@@ -160,7 +184,14 @@ export default function NotesPage() {
     try {
       const lines = newNote.trim().split('\n');
       const title = lines[0].slice(0, 100) || 'Untitled';
-      const content = newNote.trim();
+      // Content is everything after the first line (title)
+      const bodyLines = lines.slice(1);
+      // Skip empty lines immediately after the title
+      let startIndex = 0;
+      while (startIndex < bodyLines.length && bodyLines[startIndex].trim() === '') {
+        startIndex++;
+      }
+      const content = bodyLines.slice(startIndex).join('\n').trim() || title;
 
       const res = await fetch('/api/notes', {
         method: 'POST',
@@ -583,8 +614,8 @@ export default function NotesPage() {
             </div>
           </SortableContext>
 
-          {/* Trash drop zone - visible during drag */}
-          <TrashDropZone isVisible={!!activeId} />
+          {/* Trash drop zone - visible during drag (desktop only) */}
+          {!isMobile && <TrashDropZone isVisible={!!activeId} />}
 
           {/* Drag overlay for the card being dragged */}
           <DragOverlay>
