@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { MoreVertical, Trash2, Pin, Tag, CheckSquare, Loader2 } from 'lucide-react';
@@ -55,6 +54,11 @@ export function NoteCard({ note, onDelete, onTagsChange, onResize, onPinToggle, 
   const colSpan = note.cardColSpan || 1;
   const rowSpan = note.cardRowSpan || 1;
 
+  // Use onClick navigation instead of Link to work with dnd-kit
+  const handleCardClick = useCallback(() => {
+    router.push(`/notes/${note.id}`);
+  }, [router, note.id]);
+
   async function handleTransformToTodo() {
     setIsTransforming(true);
     try {
@@ -86,40 +90,41 @@ export function NoteCard({ note, onDelete, onTagsChange, onResize, onPinToggle, 
         gridRow: `span ${rowSpan}`,
       }}
     >
-      <Link href={`/notes/${note.id}`}>
-        <CardContent className="p-5 h-full flex flex-col cursor-pointer">
-          <h3 className={`font-semibold text-foreground mb-2 group-hover:text-primary transition-colors pr-16 ${rowSpan > 1 ? 'line-clamp-2' : 'line-clamp-1'}`}>
-            {note.isPinned && <Pin size={14} className="inline mr-1.5 text-primary" />}
-            {note.title}
-          </h3>
-          {note.tags && note.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {note.tags.slice(0, maxTags).map(tag => (
-                <TagBadge key={tag.id} name={tag.name} color={tag.color} />
-              ))}
-              {note.tags.length > maxTags && (
-                <span className="text-xs text-muted-foreground">
-                  +{note.tags.length - maxTags}
-                </span>
-              )}
-            </div>
-          )}
-          <div
-            className="prose prose-sm text-muted-foreground text-sm flex-1 mb-3 overflow-hidden max-w-full"
-            style={{
-              display: '-webkit-box',
-              WebkitLineClamp: lineClampValue,
-              WebkitBoxOrient: 'vertical',
-            }}
-          >
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{getBodyContent(note.content)}</ReactMarkdown>
+      <CardContent
+        className="p-5 h-full flex flex-col cursor-pointer"
+        onClick={handleCardClick}
+      >
+        <h3 className={`font-semibold text-foreground mb-2 group-hover:text-primary transition-colors pr-16 ${rowSpan > 1 ? 'line-clamp-2' : 'line-clamp-1'}`}>
+          {note.isPinned && <Pin size={14} className="inline mr-1.5 text-primary" />}
+          {note.title}
+        </h3>
+        {note.tags && note.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {note.tags.slice(0, maxTags).map(tag => (
+              <TagBadge key={tag.id} name={tag.name} color={tag.color} />
+            ))}
+            {note.tags.length > maxTags && (
+              <span className="text-xs text-muted-foreground">
+                +{note.tags.length - maxTags}
+              </span>
+            )}
           </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground/60">
-            <span>{countWords(note.content)} words</span>
-            <span>{format(new Date(note.updatedAt), 'MMM d, yyyy')}</span>
-          </div>
-        </CardContent>
-      </Link>
+        )}
+        <div
+          className="prose prose-sm text-muted-foreground text-sm flex-1 mb-3 overflow-hidden max-w-full"
+          style={{
+            display: '-webkit-box',
+            WebkitLineClamp: lineClampValue,
+            WebkitBoxOrient: 'vertical',
+          }}
+        >
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{getBodyContent(note.content)}</ReactMarkdown>
+        </div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground/60">
+          <span>{countWords(note.content)} words</span>
+          <span>{format(new Date(note.updatedAt), 'MMM d, yyyy')}</span>
+        </div>
+      </CardContent>
 
       {/* Action menu */}
       <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
