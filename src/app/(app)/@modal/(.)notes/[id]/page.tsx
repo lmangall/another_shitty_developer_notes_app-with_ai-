@@ -36,9 +36,14 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
   const [deleting, setDeleting] = useState(false);
   const [open, setOpen] = useState(true);
 
+  // Don't intercept the trash route - let it render the actual trash page
+  const isTrashRoute = id === 'trash';
+
   useEffect(() => {
-    fetchNoteData();
-  }, [id]);
+    if (!isTrashRoute) {
+      fetchNoteData();
+    }
+  }, [id, isTrashRoute]);
 
   const fetchNoteData = async () => {
     try {
@@ -108,6 +113,11 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
       setContent(note.content);
     }
   };
+
+  // Don't render the modal for trash route
+  if (isTrashRoute) {
+    return null;
+  }
 
   return (
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
