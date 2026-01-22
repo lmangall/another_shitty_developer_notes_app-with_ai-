@@ -8,6 +8,7 @@ import { TagBadge } from '@/components/tag-badge';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -112,6 +113,9 @@ export function TagPicker({ noteId, currentTags, onTagsChange, open, onOpenChang
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Manage Tags</DialogTitle>
+          <DialogDescription className="sr-only">
+            Add or remove tags from this note
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

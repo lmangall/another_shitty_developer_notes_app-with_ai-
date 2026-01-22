@@ -8,25 +8,20 @@ import { Input } from '@/components/ui/input';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetFooter,
 } from '@/components/ui/sheet';
 import { TiptapEditor } from '@/components/notes/tiptap-editor';
 import { format, isValid } from 'date-fns';
+import { getNote, updateNote, deleteNote } from '@/actions/notes';
+import type { Note } from '@/db/schema';
 
 function formatDate(dateValue: string | Date | null | undefined): string {
   if (!dateValue) return 'Unknown';
   const date = new Date(dateValue);
   return isValid(date) ? format(date, 'MMM d, yyyy h:mm a') : 'Unknown';
-}
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export default function NoteModal({ params }: { params: Promise<{ id: string }> }) {
@@ -42,17 +37,19 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
   const [open, setOpen] = useState(true);
 
   useEffect(() => {
-    fetchNote();
+    fetchNoteData();
   }, [id]);
 
-  const fetchNote = async () => {
+  const fetchNoteData = async () => {
     try {
-      const res = await fetch(`/api/notes/${id}`);
-      if (!res.ok) throw new Error('Note not found');
-      const data = await res.json();
-      setNote(data);
-      setTitle(data.title);
-      setContent(data.content);
+      const result = await getNote(id);
+      if (!result.success) {
+        router.back();
+        return;
+      }
+      setNote(result.data);
+      setTitle(result.data.title);
+      setContent(result.data.content);
     } catch (error) {
       console.error('Failed to fetch note:', error);
       router.back();
@@ -64,13 +61,13 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/notes/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content }),
-      });
+      const result = await updateNote({ id, title, content });
 
-      if (!res.ok) throw new Error('Failed to update note');
+      if (!result.success) {
+        console.error('Failed to save note:', result.error);
+        setSaving(false);
+        return;
+      }
       // Close modal and refresh the notes list to show changes
       router.back();
       router.refresh();
@@ -85,8 +82,12 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
 
     setDeleting(true);
     try {
-      const res = await fetch(`/api/notes/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete note');
+      const result = await deleteNote(id);
+      if (!result.success) {
+        console.error('Failed to delete note:', result.error);
+        setDeleting(false);
+        return;
+      }
       router.push('/notes');
       router.refresh();
     } catch (error) {
@@ -115,6 +116,7 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
           <>
             <SheetHeader>
               <SheetTitle className="sr-only">Loading note...</SheetTitle>
+              <SheetDescription className="sr-only">Loading note details</SheetDescription>
             </SheetHeader>
             <div className="flex justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -123,6 +125,7 @@ export default function NoteModal({ params }: { params: Promise<{ id: string }> 
         ) : note ? (
           <>
             <SheetHeader className="pr-8">
+              <SheetDescription className="sr-only">View and edit note</SheetDescription>
               {editing ? (
                 <>
                   <SheetTitle className="sr-only">Editing: {note.title}</SheetTitle>

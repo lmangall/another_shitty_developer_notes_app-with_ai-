@@ -8,6 +8,11 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2025-01-22',
+    type: 'fix',
+    message: 'Note modal now opens correctly when clicking on notes',
+  },
+  {
+    date: '2025-01-22',
     type: 'feat',
     message: 'Word count displayed in note detail footer',
   },

@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -587,6 +588,9 @@ export function QuickCreateFAB() {
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-lg max-h-[80vh] flex! flex-col! overflow-hidden p-0">
           <DialogHeader className="px-4 py-3 border-b">
+            <DialogDescription className="sr-only">
+              Chat with the AI assistant to create notes, reminders, and todos
+            </DialogDescription>
             <div className="flex items-center justify-between">
               <DialogTitle className="text-lg">AI Assistant</DialogTitle>
               <div className="flex items-center gap-2 mr-6">
