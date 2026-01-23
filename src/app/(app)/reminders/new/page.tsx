@@ -101,14 +101,16 @@ export default function NewReminderPage() {
                     disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                   />
                 </div>
-                {selectedDate && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <Input
-                      type="time"
-                      value={selectedTime}
-                      onChange={(e) => setSelectedTime(e.target.value)}
-                      className="w-28"
-                    />
+                <div className="mt-2 flex items-center gap-2">
+                  <Label htmlFor="time-desktop" className="text-sm text-muted-foreground">Time:</Label>
+                  <Input
+                    id="time-desktop"
+                    type="time"
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                    className="w-28"
+                  />
+                  {selectedDate && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -118,8 +120,8 @@ export default function NewReminderPage() {
                     >
                       Clear
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
               {/* Right: Message + Notify Via */}
@@ -261,28 +263,32 @@ export default function NewReminderPage() {
                         disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                       />
                     </div>
-                  </div>
-                )}
-                {selectedDate && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <Input
-                      type="time"
-                      value={selectedTime}
-                      onChange={(e) => setSelectedTime(e.target.value)}
-                      className="w-28"
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      {format(selectedDate, 'EEE, MMM d')}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedDate(undefined)}
-                      className="text-muted-foreground text-xs ml-auto"
-                    >
-                      Clear
-                    </Button>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Label htmlFor="time-mobile" className="text-sm text-muted-foreground">Time:</Label>
+                      <Input
+                        id="time-mobile"
+                        type="time"
+                        value={selectedTime}
+                        onChange={(e) => setSelectedTime(e.target.value)}
+                        className="w-28"
+                      />
+                      {selectedDate && (
+                        <>
+                          <span className="text-sm text-muted-foreground">
+                            {format(selectedDate, 'EEE, MMM d')}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedDate(undefined)}
+                            className="text-muted-foreground text-xs ml-auto"
+                          >
+                            Clear
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

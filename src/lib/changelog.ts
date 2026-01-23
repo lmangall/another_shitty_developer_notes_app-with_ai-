@@ -7,6 +7,11 @@ export interface ChangelogEntry {
 // Add new entries at the top
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2025-01-23',
+    type: 'fix',
+    message: 'Time picker now always visible in reminder form',
+  },
+  {
     date: '2025-01-22',
     type: 'fix',
     message: 'Note modal now opens correctly when clicking on notes',
